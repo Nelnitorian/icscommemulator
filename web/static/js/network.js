@@ -688,7 +688,7 @@ function hasValidFields(dict) {
     }
 
     // Check if functionCode is in the valid set of numbers
-    const validFunctionCodes = [1, 2, 3, 4, 5, 6, 15, 16];
+    const validFunctionCodes = [1, 2, 3, 4, 5, 6, 15, 16, 43];
     if (!validFunctionCodes.includes(dict.function_code)) {
         return false;
     }
@@ -896,22 +896,22 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     discreteInputsTypeElement.addEventListener('change', function () {
-        var placeholder = this.value === 'sparse' ? '0:0,1:1,2:0,3:1,4:0' : '0,1,0,0,1';
+        var placeholder = this.value === 'sparse' ? '1:1,2:0,3:1,4:0' : '0,1,0,0,1';
         discreteInputsElement.placeholder = placeholder;
     });
 
     coilsTypeElement.addEventListener('change', function () {
-        var placeholder = this.value === 'sparse' ? '0:0,1:1,2:0,3:1,4:0' : '0,1,0,0,1';
+        var placeholder = this.value === 'sparse' ? '1:1,2:0,3:1,4:0' : '0,1,0,0,1';
         coilsElement.placeholder = placeholder;
     });
 
     inputRegistersTypeElement.addEventListener('change', function () {
-        var placeholder = this.value === 'sparse' ? '0:0,1:1,2:2,3:3,4:4' : '0,1,2,3,4';
+        var placeholder = this.value === 'sparse' ? '1:1,2:2,3:3,4:4' : '0,1,2,3,4';
         inputRegistersElement.placeholder = placeholder;
     });
 
     holdingRegistersTypeElement.addEventListener('change', function () {
-        var placeholder = this.value === 'sparse' ? '0:0,1:1,2:2,3:3,4:4' : '0,1,2,3,4';
+        var placeholder = this.value === 'sparse' ? '1:1,2:2,3:3,4:4' : '0,1,2,3,4';
         holdingRegistersElement.placeholder = placeholder;
     });
 
@@ -968,6 +968,13 @@ function parseRegisterValues(type, values) {
                     acc[key] = parseInt(value, 10);
                     return acc;
                 }, {});
+            for (let key in result) {
+                if (parseInt(key, 10) = 0) {
+                    console.log('Error: Register key cannot be less than or equal to 0');
+                    configError('Error: Register key cannot be less than or equal to 0');
+                    return null;
+                }
+            }
             return result
         }
     } else {
@@ -1012,9 +1019,9 @@ function addRow(timestamp = '', recurrent = false, interval = '', functionCode =
         <option value="43" ${functionCode === 43 ? 'selected' : ''}>Read Device Information (43)</option>
       </select>`;
 
-    startAddressCell.innerHTML = `<input type="text" placeholder="0" value="${startAddress}">`;
-    countCell.innerHTML = `<input type="text" ${[5, 6, 15, 16].includes(functionCode) ? "class=\"hidden\"" : ""} placeholder="10" value="${count}">`;
-    valuesCell.innerHTML = `<input type="text" ${[1, 2, 3, 4].includes(functionCode) ? "class=\"hidden\"" : ""} placeholder="1,2,3" value="${values}">`;
+    startAddressCell.innerHTML = `<input type="text" ${[43].includes(functionCode) ? "class=\"hidden\"" : ""} placeholder="0" value="${startAddress}">`;
+    countCell.innerHTML = `<input type="text" ${[5, 6, 15, 16, 43].includes(functionCode) ? "class=\"hidden\"" : ""} placeholder="10" value="${count}">`;
+    valuesCell.innerHTML = `<input type="text" ${[1, 2, 3, 4, 43].includes(functionCode) ? "class=\"hidden\"" : ""} placeholder="1,2,3" value="${values}">`;
     deleteCell.innerHTML = '<button onclick="deleteRow(this)">Delete</button>';
 
     setEdgeFormLocation();
@@ -1050,8 +1057,12 @@ function updateFields(event) {
     const selectElement = event.target;
     const row = selectElement.parentNode.parentNode;
     const functionCode = selectElement.value;
+    const startAddressField = row.cells[4].getElementsByTagName('input')[0];
     const countField = row.cells[5].getElementsByTagName('input')[0];
     const valuesField = row.cells[6].getElementsByTagName('input')[0];
+
+
+    startAddressField.classList.remove('hidden');
 
     // Show or hide the "count" and "values" fields depending on the function code.
     if (['1', '2', '3', '4'].includes(functionCode)) {
@@ -1065,6 +1076,12 @@ function updateFields(event) {
         valuesField.classList.remove('hidden');
         valuesField.classList.add('visible');
         valuesField.placeholder = functionCode === '5' ? '0 or 1' : '0x0001 or 14';
+    } else if (functionCode === '43') {
+        countField.classList.add('hidden');
+        countField.classList.remove('visible');
+        valuesField.classList.add('hidden');
+        valuesField.classList.remove('visible');
+        startAddressField.classList.add('hidden');
     } else {
         countField.classList.add('hidden');
         countField.classList.remove('visible');

@@ -1,19 +1,15 @@
 coils:
-  type: sequential
+  type: sparse
   values:
-  - 1
-  - 1
-  - 1
-  - 1
-  - 1
-  - 1
-  - 1
+    0: 0
 discrete_inputs:
-  type: sequential
-  values: ''
+  type: sparse
+  values:
+    1: 0
 holding_registers:
   type: sequential
-  values: ''
+  values:
+    - 0
 identity:
   major_minor_revision: ''
   model_name: ''
@@ -26,5 +22,5 @@ input_registers:
   type: sequential
   values: ''
 ip: "localhost"
-port: '5020'
+port: '502'
 slave_id: '1'

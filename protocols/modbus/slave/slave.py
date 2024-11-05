@@ -20,9 +20,11 @@ class ModbusSlave:
     def create_data_block(self, config):
         if config["values"]:
             if config["type"] == "sequential":
-                return ModbusSequentialDataBlock(0, config["values"])
+                return ModbusSequentialDataBlock(1, config["values"])
             elif config["type"] == "sparse":
-                return ModbusSparseDataBlock(config["values"])
+                return ModbusSparseDataBlock(
+                    {key + 1: value for key, value in config["values"].items()}
+                )
         else:
             return ModbusSparseDataBlock()
 
