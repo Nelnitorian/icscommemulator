@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" type="text/css" href="/static/css/roboto.css">
+    <link rel="stylesheet" type="text/css" href="/static/css/index.css">
+    <script src="/static/js/ipaddr.min.js"></script>
+    <script src="/static/js/index.js"></script>
+    <title>ICSCommEmulator</title>
+</head>
+
+<body>
+    <h1>Bienvenido a ICSCommEmulator</h1>
+    <p>Aprende más sobre el proyecto, carga un escenario o crea uno nuevo.</p>
+
+    <button class="button" id="loadScenarioButton" onclick="loadScenario()">Cargar Escenario</button>
+    <button class="button" id="newScenarioButton" onclick="showForm()">Nuevo Escenario</button>
+
+    <div class="form-container" id="form-container">
+        <h2>Create New Scenario</h2>
+        <form id="scenario-form" onsubmit="submitForm(event)">
+            <div class="single-line">
+                <label for="projectName">Project Name</label>
+                <input type="text" id="projectName" placeholder="My Project" autocomplete="off" required>
+            </div>
+
+            <div class="single-line">
+                <label for="projectName">IP Subrange</label>
+                <input type="text" id="ipSubrange" placeholder="192.168.100.0/24" autocomplete="off" required>
+            </div>
+
+            <div class="single-line">
+                <label for="protocol">Scenario Protocol</label>
+                <select id="protocol" name="protocol" required>
+                    <option value="modbus" selected>Modbus/TCP</option>
+                </select>
+            </div>
+
+            <div class="single-line">
+                <label for="masterNodes">Number of Master Nodes</label>
+                <input type="number" id="masterNodes" placeholder="2" autocomplete="off" required>
+            </div>
+
+            <div class="single-line">
+                <label for="slaveNodes">Number of Slave Nodes</label>
+                <input type="number" id="slaveNodes" placeholder="5" autocomplete="off" required>
+            </div>
+
+            <div class="single-line">
+                <button type="button" class="button cancel" onclick="cancelForm()">Cancel</button>
+                <button type="submit" class="button">Submit</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="form-container" id="load-container" style="display: none;">
+        <h2>Available Scenarios</h2>
+        <div id="scenario-list"></div>
+    </div>
+
+</body>
+
+</html>

@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Network Graph</title>
+  <script src="/static/js/cytoscape.3.18.1.min.js"></script>
+  <script src="/static/js/ipaddr.min.js"></script>
+  <link rel="stylesheet" type="text/css" href="/static/css/roboto.css">
+  <link rel="stylesheet" type="text/css" href="/static/css/network.css">
+  </link>
+</head>
+
+<body>
+  <div id="instructions">
+    <p><strong>Pulsación larga</strong>: Abre configuración / Genera nodo.</p>
+    <p><strong>Pulsación corta en nodo</strong>: Selecciona / Enlaza con otro.</p>
+    <p><strong>Supr</strong>: Eliminar.</p>
+    <p><strong>Ctrl+Z/Y</strong>: Deshacer/Rehacer.</p>
+    <p><strong>Esc</strong>: Cancelar.</p>
+  </div>
+
+  <div id="toolbar">
+    <button id="runButton" onclick="run()">Run</button>
+    <button id="saveButton" onclick="save()">Guardar</button>
+  </div>
+
+  <div id="zoom-controls">
+    <button id="zoom-in" onclick="zoomIn()">+</button>
+    <button id="zoom-out" onclick="zoomOut()">-</button>
+  </div>
+
+  <div id="error-message"></div>
+  <div id="configPopup" class="configPopup">
+    <form id="configForm">
+      <!-- General config -->
+      <div class="form-row single-line">
+        <label for="name">Nombre</label>
+        <input type="text" id="name" name="name">
+      </div>
+      <div class="form-row">
+        <label for="comment">Comentario</label>
+        <input type="text" id="comment" name="comment">
+      </div>
+      <div class="form-row single-line">
+        <label for="role">Rol</label>
+        <select id="role" name="role">
+          <option value="master">Master</option>
+          <option value="slave">Slave</option>
+        </select>
+      </div>
+      <div class="form-row single-line">
+        <label for="ip">IP</label>
+        <input type="text" id="ip" name="ip">
+      </div>
+
+      <div class="form-row single-line">
+        <label for="mac">MAC</label>
+        <input type="text" id="mac" name="mac">
+      </div>
+
+      <!-- Slave config -->
+      <div class="form-row" id="slave-config" style="display: none;">
+        <div class="form-row single-line">
+          <label for="port">Port</label>
+          <input type="text" id="port" name="port">
+        </div>
+        <div class="form-row single-line">
+          <label for="slave_id">Slave ID</label>
+          <input type="text" id="slave_id" name="slave_id">
+        </div>
+
+        <div class="form-row single-line">
+          <label>Registers</label>
+          <button onclick="showRegistersConfiguration(event)">Configure</button>
+        </div>
+
+        <div class="form-row single-line">
+          <label>Identity</label>
+          <button onclick="showIdentityConfiguration(event)">Configure</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+
+  <!-- Registers config -->
+  <div id="registers_panel" style="display: none" , class="configPopup">
+    <form>
+
+      <div class="form-row header">
+        <label>Discrete Inputs:</label>
+      </div>
+      <div class="form-row single-line">
+        <label for="discrete_inputs_type" class="input-field">Type</label>
+        <select id="discrete_inputs_type" name="discrete_inputs_type" class="input-field">
+          <option value="sequential">Sequential</option>
+          <option value="sparse">Sparse</option>
+        </select>
+      </div>
+      <div class="form-row single-line">
+        <label for="discrete_inputs" class="input-field">Values</label>
+        <input type="text" id="discrete_inputs" name="discrete_inputs" placeholder="0,1,2,3,4" class="input-field">
+      </div>
+
+      <div class="form-row header">
+        <label>Coils:</label>
+      </div>
+      <div class="form-row single-line">
+        <label for="coils_type" class="input-field">Type</label>
+        <select id="coils_type" name="coils_type" class="input-field">
+          <option value="sequential">Sequential</option>
+          <option value="sparse">Sparse</option>
+        </select>
+      </div>
+      <div class="form-row single-line">
+        <label for="coils" class="input-field">Values</label>
+        <input type="text" id="coils" name="coils" placeholder="0,1,0,0,1" class="input-field">
+      </div>
+
+      <div class="form-row header">
+        <label>Input Registers:</label>
+      </div>
+      <div class="form-row single-line">
+        <label for="input_registers_type" class="input-field">Type</label>
+        <select id="input_registers_type" name="input_registers_type" class="input-field">
+          <option value="sequential">Sequential</option>
+          <option value="sparse">Sparse</option>
+        </select>
+      </div>
+      <div class="form-row single-line">
+        <label for="input_registers" class="input-field">Values</label>
+        <input type="text" id="input_registers" name="input_registers" placeholder="0,1,2,3,4" class="input-field">
+      </div>
+
+      <div class="form-row header">
+        <label>Holding Registers:</label>
+      </div>
+      <div class="form-row single-line">
+        <label for="holding_registers_type" class="input-field">Type</label>
+        <select id="holding_registers_type" name="holding_registers_type">
+          <option value="sequential">Sequential</option>
+          <option value="sparse">Sparse</option>
+        </select>
+      </div>
+      <div class="form-row single-line">
+        <label for="holding_registers" class="input-field">Values</label>
+        <input type="text" id="holding_registers" name="holding_registers" placeholder="0,1,2,3,4" class="input-field">
+      </div>
+    </form>
+  </div>
+
+  <!-- Identity config -->
+  <div id="identity_panel" style="display: none" , class="configPopup">
+    <form>
+      <div class="form-row">
+        <label for="vendor_name" class="input-field">Vendor Name</label>
+        <input type="text" id="vendor_name" name="vendor_name" placeholder="ModbusDeviceCo" class="input-field">
+      </div>
+
+      <div class="form-row">
+        <label for="product_code" class="input-field">Product Code</label>
+        <input type="text" id="product_code" name="product_code" placeholder="MDX-1000" class="input-field">
+      </div>
+
+      <div class="form-row">
+        <label for="major_minor_revision" class="input-field">Major Minor Revision</label>
+        <input type="text" id="major_minor_revision" name="major_minor_revision" placeholder="1.5" class="input-field">
+      </div>
+
+      <div class="form-row">
+        <label for="vendor_url" class="input-field">Vendor Url</label>
+        <input type="text" id="vendor_url" name="vendor_url" placeholder="http://www.modbusdeviceco.com"
+          class="input-field">
+      </div>
+
+      <div class="form-row">
+        <label for="product_name" class="input-field">Product Name</label>
+        <input type="text" id="product_name" name="product_name" placeholder="Modbus Advanced Device"
+          class="input-field">
+      </div>
+
+      <div class="form-row">
+        <label for="model_name" class="input-field">Model Name</label>
+        <input type="text" id="model_name" name="model_name" placeholder="MDX-1000 Standard" class="input-field">
+      </div>
+
+      <div class="form-row">
+        <label for="user_application_name" class="input-field">User Application Name</label>
+        <input type="text" id="user_application_name" name="user_application_name"
+          placeholder="Temperature Control Unit" class="input-field">
+      </div>
+    </form>
+  </div>
+
+  <!-- Edge config -->
+  <div id="edgeConfigPopup" class="configPopup">
+    <h3 id="edgeConfigDirection"></h3>
+    <table id="edgeConfigForm">
+      <thead>
+        <tr>
+          <th>Time Marker</th>
+          <th>Recurrent</th>
+          <th>Interval</th>
+          <th>Function Code</th>
+          <th>Start Address</th>
+          <th>Count</th>
+          <th>Value(s)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <!-- Not used. JS deletes it -->
+          <!-- <td><input type="text" id="timestamp" placeholder="2, 10"></td>
+          <td><input type="checkbox" id="recurrent" onclick="recurrentToggle(this)"></td>
+          <td><input type="text" id="interval" class="hidden" placeholder="5">
+          </td>
+          <td>
+            <select id="functionCode" onchange="updateFields(event)">
+              <option value="1">Read Coils (1)</option>
+              <option value="2">Read Discrete Inputs (2)</option>
+              <option value="3">Read Holding Registers (3)</option>
+              <option value="4">Read Input Registers (4)</option>
+              <option value="5">Write Single Coil (5)</option>
+              <option value="6">Write Single Register (6)</option>
+              <option value="15">Write Multiple Coils (15)</option>
+              <option value="16">Write Multiple Registers (16)</option>
+              <option value="43">Read Device Information (43)</option>
+            </select>
+          </td>
+          <td><input type="text" id="startAddress" placeholder="0"></td>
+          <td><input type="text" id="count" placeholder="10"></td>
+          <td><input type="text" id="values" class="hidden" placeholder="1,2,3"></td>
+          <td><button onclick="deleteRow(this)">Delete</button></td> -->
+
+        </tr>
+      </tbody>
+    </table>
+    <button onclick="addRow()">
+      <img src="/static/img/plus.png" alt="Add Row">
+    </button>
+  </div>
+
+  <div id="run_overlay" style="display: none;">
+    <div id="run_overlay_content" class="configRun">
+      <h2>Running...</h2>
+
+      <div class="form-row single-line">
+        <p>Remaining: </p>
+        <p id="time_progress">-</p>
+      </div>
+
+      <div class="form-row single-line">
+        <p>Progress: </p>
+        <p id="percentage_progress">-</p>
+      </div>
+
+      <div class="form-row single-line">
+        <p>Pcap Size (bytes): </p>
+        <p id="pcap_size">-</p>
+      </div>
+
+      <!-- <p id="remaining_time"></p> -->
+      <button id="stop_button" onclick="stop()">Parar</button>
+    </div>
+  </div>
+
+  <div id="run_settings" style="display: none;">
+    <div id="run_settings_content" class="configRun">
+      <h2>Configuración del escenario</h2>
+      <div class="form-row single-line">
+        <label for="simulation_time">Tiempo de simulación (s)</label>
+        <input type="text" id="simulation_time" name="simulation_time" placeholder="60">
+      </div>
+      <button id="cancel_button" onclick="cancel()">Cancelar</button>
+      <button id="run_button" onclick="simulate()">Simular</button>
+    </div>
+  </div>
+
+  <div id="cy" style="width: 100%; height: 100vh;"></div>
+  <script>
+    var networkData = {{ network_data | tojson }};
+  </script>
+  <script src="/static/js/network.js"></script>
+</body>
+
+</html>

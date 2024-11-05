@@ -1,0 +1,30 @@
+coils:
+  type: sequential
+  values:
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+discrete_inputs:
+  type: sequential
+  values: ''
+holding_registers:
+  type: sequential
+  values: ''
+identity:
+  major_minor_revision: ''
+  model_name: ''
+  product_code: ''
+  product_name: ''
+  user_application_name: ''
+  vendor_name: ''
+  vendor_url: ''
+input_registers:
+  type: sequential
+  values: ''
+ip: "localhost"
+port: '5020'
+slave_id: '1'

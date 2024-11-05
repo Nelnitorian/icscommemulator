@@ -1,0 +1,14 @@
+# Use an official Python runtime as a parent image
+FROM python:3.10.0-alpine
+
+# Set the working directory in the container to /app
+WORKDIR /app
+
+# Add the main script into the container at /app
+COPY ./slave.py /app
+
+# Install any needed packages specified in requirements.txt
+RUN pip install --no-cache-dir pymodbus pyyaml
+
+# Run modbus_slave.py when the container launches
+ENTRYPOINT ["python", "slave.py"]

@@ -1,0 +1,7 @@
+dnp3-python
+pymodbus
+pyiec61850
+pytest
+flask
+pandas
+waitress

@@ -1,0 +1,116 @@
+body {
+    font-family: 'Roboto', sans-serif;
+    text-align: center;
+    padding: 50px;
+}
+.button {
+    display: inline-block;
+    margin: 20px;
+    padding: 15px 25px;
+    font-size: 16px;
+    cursor: pointer;
+    background-color: #007BFF;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    text-decoration: none;
+}
+.button:hover {
+    background-color: #0056b3;
+}
+.button.active {
+    background-color: #28a745;
+}
+.button.cancel {
+    background-color: #dc3545;
+}
+.form-container {
+    display: none;
+    margin-top: 20px;
+}
+.form-container input, .form-container select {
+    display: block;
+    margin: 10px auto;
+    padding: 10px;
+}
+
+#form-container{
+    padding-top: 20px;
+    /* background-color: #f9f9f9;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    max-width: 600px; */
+}
+
+#scenario-form{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+}
+
+.single-line {
+    display: grid;
+    grid-template-columns: 2fr 2fr;
+    align-items: center;
+    gap: 10px;
+    width: 25%;
+    margin-bottom: 10px;
+}
+
+.single-line label {
+    justify-self: end;
+    margin-right: 10px;
+}
+
+.single-line input, .single-line select {
+    justify-self: start;
+}
+
+#load-container {
+    display: none;
+    margin-top: 20px;
+    padding: 20px;
+    background-color: #f9f9f9;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    max-width: 600px;
+    margin: 20px auto;
+    transition: all 0.3s ease;
+}
+
+/* Animation for the container appearance */
+#load-container.show {
+    display: block;
+    opacity: 0;
+    animation: fadeIn 0.5s forwards;
+}
+
+@keyframes fadeIn {
+    to {
+        opacity: 1;
+    }
+}
+
+/* Style the scenario list */
+#scenario-list {
+    margin-top: 20px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+#scenario-list div {
+    background-color: #007BFF;
+    color: white;
+    padding: 15px;
+    border-radius: 5px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    cursor: pointer;
+    transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+#scenario-list div:hover {
+    background-color: #0056b3;
+    transform: translateY(-5px);
+}

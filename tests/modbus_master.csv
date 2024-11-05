@@ -1,0 +1,4 @@
+count,function_code,interval,ip,port,recurrent,slave_id,start_address,timestamp,values
+1,1,,localhost,5020,False,1,2,0,[]
+2,1,,localhost,5020,False,1,1,2,[]
+1,1,,localhost,5020,False,1,1,5,[]

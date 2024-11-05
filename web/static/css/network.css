@@ -1,0 +1,252 @@
+#cy{
+    height: 100vh;    
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+}
+
+#nodeConfigPopup.configPopup {
+    width: 250px;
+}
+
+.configPopup {
+    background-color: #f8f9fa;
+    border: 1px solid #ced4da;
+    border-radius: 5px;
+    padding: 20px;
+    display: none;
+    position: absolute; 
+    z-index: 10;
+    box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+}
+
+.form-row {
+    margin-bottom: 10px;
+}
+
+.form-row label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.form-row.header{
+    margin-bottom: 2px;
+}
+
+.form-row input,
+.form-row select {
+    width: 100%;
+    padding: 5px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+}
+
+.form-row.single-line {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.form-row.single-line label {
+    flex: 1;
+}
+
+.form-row.single-line input,
+.form-row.single-line select {
+    flex: 2;
+}
+.form-row.single-line button{
+    flex: 2;
+}
+
+button img {
+    width: 25px; /* Adjust the width as needed */
+    height: 25px; /* Adjust the height as needed */
+    vertical-align: middle; /* Align the image vertically in the middle */
+    border: none; /* Remove any border */
+    /* margin-left: 5px; */
+    background: none; /* Remove default button background */
+    border: none; /* Remove default button border */
+    padding: 0; /* Remove default button padding */
+    cursor: pointer; /* Change cursor to pointer */
+  }
+  
+
+  #toolbar{
+    /* TODO improve save visuals */
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background-color: #a2a0a0; /* Solid color */
+    padding: 10px;
+    border-radius: 5px;
+    z-index: 20; /* Ensure it is above other elements */
+    /* Remove backdrop-filter if solid color is desired */
+    /* max-width: 200px; */
+    /* resize: both; */
+    overflow: auto;
+  }
+
+  #toolbar button{
+    /* background-color: #007bff;
+    color: white; */
+    border: none;
+    padding: 10px 20px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 16px;
+    margin: 4px 2px;
+    cursor: pointer;
+    border-radius: 4px;
+  }
+
+/* .form-row button {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 16px;
+    margin: 4px 2px;
+    cursor: pointer;
+    border-radius: 4px;
+} */
+
+.input-field {
+    padding-left: 10px;
+    font-size: 14px;
+}
+
+#instructions {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background-color: rgba(162, 160, 160, 0.7); /* Blanco con 70% de opacidad */
+    padding: 10px;
+    border-radius: 5px;
+    z-index: 20; /* Asegúrate de que está por encima de otros elementos */
+    backdrop-filter: blur(5px); /* Emborrona el contenido detrás del div */
+    /* max-width: 200px; */
+    resize: both;
+    overflow: auto;
+    width: 215px;
+    height: 230px;
+  }
+
+  #error-message {
+    /* ... existing styles ... */
+    opacity: 0;
+    display: block;
+    /* display: none;  */
+    position: fixed; 
+    left: 0;
+    right: 0;
+    bottom: 0; 
+    width: 100%; 
+    z-index: 20;
+    background-color: 
+    red; color: 
+    white; text-align: 
+    center; padding: 10px;
+}
+
+/* Begin edge config */
+body {
+    font-family: 'Roboto', sans-serif;
+    margin: 20px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+th, td {
+    border: 1px solid #ddd;
+    padding: 10px;
+    text-align: left;
+}
+
+th {
+    background-color: #f4f4f4;
+}
+
+input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 5px;
+}
+
+.hidden {
+    display: none;
+}
+
+.visible {
+    display: table-cell;
+}
+
+/* End edge config */
+
+#zoom-controls {
+    position: absolute;
+    top: 80px;
+    right: 30px;
+    z-index: 20;
+    width: 30px;
+}
+
+#zoom-in, #zoom-out {
+    display: block;
+    width: 100%;
+    margin: 5px;
+    padding: 5px;
+    font-size: 18px;
+    cursor: pointer;
+}
+
+/* Run  */
+#run_settings{
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    z-index: 1000;
+    color: black;
+    text-align: center;
+    padding-top: 20%;
+  }
+
+#run_overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    z-index: 1000;
+    color: black;
+    text-align: center;
+    padding-top: 20%;
+  }
+
+.configRun {
+    background-color: #f8f9fa;
+    border: 1px solid #ced4da;
+    border-radius: 5px;
+    padding: 20px;
+    position: absolute;
+    z-index: 10;
+    box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+}
