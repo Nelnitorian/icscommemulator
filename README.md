@@ -13,7 +13,7 @@ The Python library requirements are in the `requirements.txt` file. Installation
 The package requirements can be found within this document or in the `install.sh` file.
 
 > [!NOTE]
-> In the installation script, the permissions for /usr/bin/tcpdump are modified. This allows it to run without sudo, as it is required by main.py.
+> In the installation script, the permissions for /usr/bin/tcpdump are modified. This allows it to be ran without sudo, as it is required by main.py.
 
 ## Dependencies
 
