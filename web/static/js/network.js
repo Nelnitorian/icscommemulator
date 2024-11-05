@@ -854,7 +854,11 @@ function handleAction(actionHistory, oppositeActionHistory, actionType) {
 
 document.addEventListener('keydown', function (evt) {
     if (evt.key === KEY_DELETE || evt.key === KEY_SUPR) {
-        if (selectedElement) {
+        if (selectedElement &&
+            !(nodeConfigPopup.style.display === 'block') &&
+            !(edgeConfigPopup.style.display === 'block') &&
+            !(runOverlayElement.style.display === 'block') &&
+            !(runSettingsElement.style.display === 'block')) {
             handleConfigurationSave();
 
             let connectedEdges = selectedElement.connectedEdges().jsons();
@@ -892,7 +896,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     discreteInputsTypeElement.addEventListener('change', function () {
-        var placeholder = this.value === 'sparse' ? '0:0,1:1,2:2,3:3,4:4' : '0,1,2,3,4';
+        var placeholder = this.value === 'sparse' ? '0:0,1:1,2:0,3:1,4:0' : '0,1,0,0,1';
         discreteInputsElement.placeholder = placeholder;
     });
 
@@ -992,9 +996,9 @@ function addRow(timestamp = '', recurrent = false, interval = '', functionCode =
     const valuesCell = newRow.insertCell(6);
     const deleteCell = newRow.insertCell(7);
 
-    timestampCell.innerHTML = `<input type="text" placeholder="2, 10" value="${timestamp}">`;
+    timestampCell.innerHTML = `<input type="text" placeholder="0" value="${timestamp}">`;
     recurrentCell.innerHTML = `<input type="checkbox" ${recurrent ? 'checked' : ''} onclick="recurrentToggle(this)">`;
-    intervalCell.innerHTML = `<td><input type="text" id="interval" class="hidden" placeholder="5" value="${interval}"></td>`
+    intervalCell.innerHTML = `<td><input type="text" id="interval" ${recurrent ? '' : 'class="hidden"'} placeholder="5" value="${interval}"></td>`
     functionCodeCell.innerHTML = `
       <select onchange="updateFields(event)">
         <option value="1" ${functionCode === 1 ? 'selected' : ''}>Read Coils (1)</option>
