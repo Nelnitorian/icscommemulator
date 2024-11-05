@@ -376,7 +376,7 @@ function populateRegistersConfiguration(data) {
     discreteInputsTypeElement.value = data.discrete_inputs.type || 'sequential';
     discreteInputsElement.value = registerToString(data.discrete_inputs.values, discreteInputsTypeElement.value);
 
-    coilsTypeElement.value = data.coils_type || 'sequential';
+    coilsTypeElement.value = data.coils.type || 'sequential';
     coilsElement.value = registerToString(data.coils.values, coilsTypeElement.value);
 
     inputRegistersTypeElement.value = data.input_registers.type || 'sequential';
