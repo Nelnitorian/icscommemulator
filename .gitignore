@@ -4,3 +4,4 @@ __pycache__
 scenarios
 outputs
 docker-compose.yml
+docs

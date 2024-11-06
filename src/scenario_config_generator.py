@@ -31,12 +31,13 @@ Usage:
     generator.generate()
 """
 
-import yaml
 import os
-import numpy as np
-import pandas as pd
 import shutil
 from typing import Any
+
+import numpy as np
+import pandas as pd
+import yaml
 
 
 class ScenarioConfigGenerator:
@@ -94,7 +95,8 @@ class ScenarioConfigGenerator:
             )
             df.to_csv(f"{self.config_path}/masters/{i}/master.csv", index=False)
         else:
-            open(f"{self.config_path}/masters/{i}/master.csv", "w").close()
+            with open(f"{self.config_path}/masters/{i}/master.csv", "w") as f:
+                f.write("")
 
     def _craft_slave(self, slave: dict[str, Any], i: int):
         """
