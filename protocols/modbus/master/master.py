@@ -53,7 +53,7 @@ class ModbusMaster:
                 row["timestamp"] = float(row["timestamp"])
                 row["recurrent"] = row["recurrent"].lower() == "true"
                 if row["recurrent"]:
-                    row["original_interval"] = float(row["timestamp"])
+                    row["original_interval"] = float(row["interval"])
                 rows.append(row)
 
         rows.sort(key=lambda x: x["timestamp"])
