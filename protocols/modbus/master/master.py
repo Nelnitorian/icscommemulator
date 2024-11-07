@@ -2,6 +2,7 @@ import csv
 import sys
 import time
 from pymodbus.client import ModbusTcpClient
+from pymodbus.client.modbusclientprotocol import ModbusClientProtocol
 from pymodbus.constants import DeviceInformation
 
 
@@ -9,11 +10,43 @@ class ModbusMaster:
     def __init__(self, csv_file="master.csv"):
         self.csv_file = csv_file
         self.responses = []
+        self._clients = {}
+        self._rows = []
+
+        self._setup()
+
+    def _setup(self):
+        self._rows = []
+        with open(self.csv_file, "r") as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                row["timestamp"] = float(row["timestamp"])
+                row["port"] = int(row["port"])
+                row["function_code"] = int(row["function_code"])
+                row["start_address"] = int(row["start_address"])
+                row["slave_id"] = int(row["slave_id"])
+                row["recurrent"] = row["recurrent"] == "True"
+                row["interval"] = float(row["interval"]) if row["recurrent"] else None
+
+                row["count"] = (
+                    int(row["count"]) if row["function_code"] in [1, 2, 3, 4] else None
+                )
+                row["values"] = (
+                    [int(v) for v in row["values"].split(",")]
+                    if row["function_code"] in [5, 6, 15, 16]
+                    else None
+                )
+
+                self._clients[(row["ip"], int(row["port"]))] = ModbusTcpClient(
+                    row["ip"], port=int(row["port"])
+                )
+                self._rows.append(row)
+
+        self._rows.sort(key=lambda x: x["timestamp"])
 
     def _send_message(
-        self, ip, port, function_code, start_address, slave_id, values=None, count=None
+        self, client, function_code, start_address, slave_id, values=None, count=None
     ):
-        client = ModbusTcpClient(ip, port=port)
         result = False
         client.connect()
         if function_code in [1, 2, 3, 4]:
@@ -46,59 +79,52 @@ class ModbusMaster:
         return result
 
     def loop(self):
-        rows = []
-        with open(self.csv_file, "r") as file:
-            reader = csv.DictReader(file)
-            for row in reader:
-                row["timestamp"] = float(row["timestamp"])
-                row["recurrent"] = row["recurrent"].lower() == "true"
-                if row["recurrent"]:
-                    row["original_interval"] = float(row["interval"])
-                rows.append(row)
-
-        rows.sort(key=lambda x: x["timestamp"])
-
         current_time = 0
         while True:
-            if not rows:
+            if not self._rows:
                 break
 
-            row = rows.pop(0)
+            row = self._rows.pop(0)
 
-            delay = max(0, row["timestamp"] - current_time)
-            time.sleep(delay)
-            current_time = row["timestamp"]
-
+            timestamp = row["timestamp"]
             ip = row["ip"]
-            port = int(row["port"])
-            function_code = int(row["function_code"])
-            start_address = int(row["start_address"])
-            slave_id = int(row["slave_id"])
-            recurrent = bool(row["recurrent"])
+            port = row["port"]
+            function_code = row["function_code"]
+            start_address = row["start_address"]
+            slave_id = row["slave_id"]
+            recurrent = row["recurrent"]
 
-            count = int(row["count"]) if function_code in [1, 2, 3, 4] else None
-            values = (
-                [int(v) for v in row["values"].split(",")]
-                if function_code in [5, 6, 15, 16]
-                else None
-            )
+            count = row["count"]
+            values = row["values"]
+
+            interval = row["interval"]
+
+            delay = max(0, timestamp - current_time)
+            time.sleep(delay)
+            current_time = timestamp
+
             print(
                 f"Sending msg to {ip}:{port} - {function_code} - {start_address} - {slave_id} - {values} - {count}"
             )
 
             self.responses.append(
                 self._send_message(
-                    ip, port, function_code, start_address, slave_id, values, count
+                    self._clients[(ip, port)],
+                    function_code,
+                    start_address,
+                    slave_id,
+                    values,
+                    count,
                 )
             )
 
             # If the row is recurrent, update its timestamp and reinsert it
             if recurrent:
-                row["timestamp"] += row["original_interval"]
-                rows.append(row)
+                row["timestamp"] += interval
+                self._rows.append(row)
 
             # Sort rows again to maintain order after reinserting recurrent rows
-            rows.sort(key=lambda x: x["timestamp"])
+            self._rows.sort(key=lambda x: x["timestamp"])
 
 
 if __name__ == "__main__":
