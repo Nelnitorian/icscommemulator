@@ -195,45 +195,9 @@ class NetworkAPI:
         dcg = DockerComposeGenerator(
             scenario["protocol"], docker_compose_path, scenario_config_path
         )
-        dcg.add_network("icscommemulator", scenario["ip_network"])
+        dcg.parse(scenario)
 
-        master_dependencies = self.get_dependencies(scenario["nodes"])
-
-        for i, node in enumerate(filter(self.is_master, scenario["nodes"])):
-            dcg.add_node(
-                node["role"],
-                i,
-                ip=node.get("ip", None),
-                mac=node.get("mac", None),
-                dependencies=master_dependencies,
-            )
-
-        for i, node in enumerate(filter(self.is_slave, scenario["nodes"])):
-            dcg.add_node(node["role"], i, ip=node["ip"], mac=node.get("mac", None))
-
-        dcg.generate()
-        if not dcg.validate():
-            raise Exception("Invalid docker-compose file")
-
-    def get_dependencies(self, nodes):
-        dependencies = {}
-        slaves = [
-            i
-            for i, node in enumerate(
-                [node for node in nodes if node["role"] == "slave"]
-            )
-        ]
-        if slaves:
-            dependencies["slave"] = slaves
-        return dependencies
-
-    def is_master(self, dic):
-        return dic["role"] == "master"
-
-    def is_slave(self, dic):
-        return dic["role"] == "slave"
-
-    def run(self, host="0.0.0.0", port=8080, debug=True):
+    def run(self, host="0.0.0.0", port=8080):
         from waitress import serve
 
         serve(self.app, host=host, port=port)
