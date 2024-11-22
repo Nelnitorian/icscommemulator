@@ -23,10 +23,15 @@ class ModbusMaster:
                 row["timestamp"] = float(row["timestamp"])
                 row["port"] = int(row["port"])
                 row["function_code"] = int(row["function_code"])
-                row["start_address"] = int(row["start_address"])
                 row["slave_id"] = int(row["slave_id"])
                 row["recurrent"] = row["recurrent"] == "True"
                 row["interval"] = float(row["interval"]) if row["recurrent"] else None
+
+                row["start_address"] = (
+                    int(row["start_address"])
+                    if row["function_code"] in [1, 2, 3, 4, 5, 6, 15, 16]
+                    else None
+                )
 
                 row["count"] = (
                     int(row["count"]) if row["function_code"] in [1, 2, 3, 4] else None
