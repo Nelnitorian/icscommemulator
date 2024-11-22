@@ -197,7 +197,7 @@ class NetworkAPI:
         )
         dcg.parse(scenario)
 
-    def run(self, host="0.0.0.0", port=8080):
+    def run(self, host="127.0.0.1", port=8080):
         from waitress import serve
 
         serve(self.app, host=host, port=port)
