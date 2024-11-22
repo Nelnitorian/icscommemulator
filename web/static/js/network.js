@@ -662,7 +662,7 @@ function hasValidFields(dict) {
 
     // Check if startAddress is a number between 0x0000 and 0xFFFF
     const startAddress = parseInt(dict.start_address, 16);
-    if (isNaN(startAddress) || startAddress < 0x0000 || startAddress > 0xFFFF) {
+    if (dict.function_code !== 43 && (isNaN(startAddress) || startAddress < 0x0000 || startAddress > 0xFFFF)) {
         return false;
     }
 
@@ -691,11 +691,6 @@ function hasValidFields(dict) {
 function saveEdgeConfig() {
     let edge = selectedElement;
     let data = edge.data();
-
-    // Is information correct?
-    // For all cells in all rows. Store columns: 
-    // [recurrent, time marker, fc, start address, count, values]
-    // in a messages: [ {}, {}, {}...]
 
     let table = edgeConfigForm.getElementsByTagName('tbody')[0];
     let rows = table.rows;
