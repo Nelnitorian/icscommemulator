@@ -32,18 +32,18 @@ function submitForm(event) {
     // Validate IP Subrange
     let validIpSubrange = parseIpNetwork(ipSubrange);
     if (!validIpSubrange) {
-        alert("Por favor, introduce un subrango IP válido (por ejemplo, 192.168.100.0/24).");
+        alert("Please enter a valid IP subrange (e.g., 192.168.100.0/24).");
         return;
     }
 
     // Validate number of master and slave nodes
     if (isNaN(masterNodes) || masterNodes <= 0) {
-        alert("Por favor, introduce un número válido de nodos maestros.");
+        alert("Please enter a valid number of master nodes  .");
         return;
     }
 
     if (isNaN(slaveNodes) || slaveNodes <= 0) {
-        alert("Por favor, introduce un número válido de nodos esclavos.");
+        alert("Please enter a valid number of slave nodes.");
         return;
     }
 
@@ -72,13 +72,13 @@ function submitForm(event) {
                 console.log('Network created and saved successfully: ', data);
                 window.location.href = 'network/' + parsedProjectName; // Redirect after saving
             } else {
-                console.error('Error al crear el escenario: ', data.error);
-                alert("Error al crear el escenario: " + data.error);
+                console.error('Error creating the scenario: ', data.error);
+                alert("Error creating the scenario: " + data.error);
             }
         })
         .catch(error => {
-            alert("Error al crear el escenario: " + error);
-            console.log('Error al crear el escenario: ', error);
+            alert("Error creating the scenario: " + error);
+            console.log('Error creating the scenario: ', error);
         });
 }
 
@@ -118,7 +118,7 @@ function getNextIpInSubnet(ipAddress, subnet) {
         }
         return ipaddr.fromByteArray(nextIp).toString();
     } else {
-        throw new Error("La IP no pertenece a la subred especificada.");
+        throw new Error("The IP does not belong to the specified subnet.");
     }
 }
 

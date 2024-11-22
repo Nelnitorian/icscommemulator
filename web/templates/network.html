@@ -12,16 +12,16 @@
 
 <body>
   <div id="instructions">
-    <p><strong>Pulsación larga</strong>: Abre configuración / Genera nodo.</p>
-    <p><strong>Pulsación corta en nodo</strong>: Selecciona / Enlaza con otro.</p>
-    <p><strong>Supr</strong>: Eliminar.</p>
-    <p><strong>Ctrl+Z/Y</strong>: Deshacer/Rehacer.</p>
-    <p><strong>Esc</strong>: Cancelar.</p>
+    <p><strong>Long Press</strong>: Opens configuration / Generates node.</p>
+    <p><strong>Short Press on Node</strong>: Selects / Links with another.</p>
+    <p><strong>Delete</strong>: Remove.</p>
+    <p><strong>Ctrl+Z/Y</strong>: Undo/Redo.</p>
+    <p><strong>Esc</strong>: Cancel.</p>
   </div>
 
   <div id="toolbar">
     <button id="runButton" onclick="run()">Run</button>
-    <button id="saveButton" onclick="save()">Guardar</button>
+    <button id="saveButton" onclick="save()">Save</button>
   </div>
 
   <div id="zoom-controls">
@@ -34,15 +34,15 @@
     <form id="configForm">
       <!-- General config -->
       <div class="form-row single-line">
-        <label for="name">Nombre</label>
+        <label for="name">Name</label>
         <input type="text" id="name" name="name">
       </div>
       <div class="form-row">
-        <label for="comment">Comentario</label>
+        <label for="comment">Comment</label>
         <input type="text" id="comment" name="comment">
       </div>
       <div class="form-row single-line">
-        <label for="role">Rol</label>
+        <label for="role">Role</label>
         <select id="role" name="role">
           <option value="master">Master</option>
           <option value="slave">Slave</option>
@@ -260,19 +260,19 @@
       </div>
 
       <!-- <p id="remaining_time"></p> -->
-      <button id="stop_button" onclick="stop()">Parar</button>
+      <button id="stop_button" onclick="stop()">Stop</button>
     </div>
   </div>
 
   <div id="run_settings" style="display: none;">
     <div id="run_settings_content" class="configRun">
-      <h2>Configuración del escenario</h2>
+      <h2>Scenario Configuration</h2>
       <div class="form-row single-line">
-        <label for="simulation_time">Tiempo de simulación (s)</label>
+        <label for="simulation_time">Emulation Time (s)</label>
         <input type="text" id="simulation_time" name="simulation_time" placeholder="60">
       </div>
-      <button id="cancel_button" onclick="cancel()">Cancelar</button>
-      <button id="run_button" onclick="simulate()">Simular</button>
+      <button id="cancel_button" onclick="cancel()">Cancel</button>
+      <button id="run_button" onclick="simulate()">Emulate</button>
     </div>
   </div>
 

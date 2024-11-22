@@ -513,27 +513,6 @@ function parseElementValues(type, value, value_save, type_save) {
     return [parsedType, parsedValue];
 }
 
-function getNextIpInSubnet(ipAddress, subnet) {
-    const ip = ipaddr.parse(ipAddress);
-    const subnetParsed = ipaddr.parseCIDR(subnet);
-
-    if (ip.match(subnetParsed)) {
-        const nextIp = ip.toByteArray();
-
-        for (let i = nextIp.length - 1; i >= 0; i--) {
-            if (nextIp[i] < 255) {
-                nextIp[i]++;
-                break;
-            }
-            nextIp[i] = 0;
-        }
-
-        return ipaddr.fromByteArray(nextIp).toString();
-    } else {
-        throw new Error("La IP no pertenece a la subred especificada.");
-    }
-}
-
 function getUniqueIp(existingIps, subnet) {
     let newIp = subnet.split('/')[0];
     do {
@@ -610,7 +589,7 @@ function getNextIpInSubnet(ipAddress, subnet) {
 
         return ipaddr.fromByteArray(nextIp).toString();
     } else {
-        throw new Error("La IP no pertenece a la subred especificada.");
+        throw new Error("The IP does not belong to the specified subnet.");
     }
 }
 
@@ -748,9 +727,9 @@ function saveEdgeConfig() {
 
     // un único mensaje erróneo
     if (invalid_rows.length === 1) {
-        configError(`Error: Campos de mensaje inválidos en la fila ${invalid_rows[0]}`);
+        configError(`Error: Invalid message fields in row ${invalid_rows[0]}`);
     } else if (invalid_rows.length > 1) {
-        configError(`Error: Campos de mensaje inválidos en las filas ${invalid_rows.join(", ")}`);
+        configError(`Error: Invalid message fields in rows ${invalid_rows.join(", ")}`);
     }
     data.messages = messages;
 }
@@ -803,7 +782,7 @@ function handleNewEdge(node) {
             createEdge(selectedElement, node);
         }
     } else {
-        configError('Error: No se puede conectar nodos del mismo tipo');
+        configError('Error: Cannot connect nodes of the same type');
     }
 }
 
@@ -883,7 +862,7 @@ document.addEventListener('keydown', function (evt) {
 document.addEventListener('DOMContentLoaded', function () {
     roleElement.addEventListener('change', function () {
         if (selectedElement.connectedEdges().length > 0) {
-            configError('Error: No se puede cambiar el rol de un nodo conectado');
+            configError('Error: Cannot change the role of a connected node');
             this.value = selectedElement.data('role');
             return;
         }
@@ -978,7 +957,7 @@ function parseRegisterValues(type, values) {
             return result
         }
     } else {
-        configError('Error: Formato incorrecto de valores de registro');
+        configError('Error: Incorrect register value format');
         return null;
     }
 }
@@ -1145,15 +1124,15 @@ function setRunSettingsLocatiton() {
 function simulate() {
     let simulation_time = parseInt(simulationTimeElement.value);
     if (simulation_time === '') {
-        alert('Error: Debe ingresar un tiempo de simulación');
+        alert('Error: You must enter a simulation time');
         return;
     }
     if (!Number.isInteger(simulation_time)) {
-        alert('Error: El tiempo de simulación debe ser un número entero');
+        alert('Error: The simulation time must be an integer');
         return;
     }
     if (simulation_time <= 0) {
-        alert('Error: El tiempo de simulación debe ser mayor a 0');
+        alert('Error: The simulation time must be greater than 0');
         return;
     }
 
@@ -1171,12 +1150,12 @@ function simulate() {
                 FILE_PATH = body.file_path;
                 start(simulation_time);
             } else {
-                alert(`Error al iniciar la simulación: ${body.error}`);
+                alert(`Error starting the simulation: ${body.error}}`);
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('Error al iniciar la simulación');
+            alert('Error starting the simulation');
         });
 }
 
@@ -1212,7 +1191,7 @@ function fetchRunData() {
 
                 if (running) {
                     if (elapsedSeconds >= totalSeconds) {
-                        alert('Simulación finalizada. Guardado en ' + FILE_PATH);
+                        alert('Simulation completed. Saved to ' + FILE_PATH);
                         cleanRunOverlay();
 
                     } else {
@@ -1288,9 +1267,9 @@ function saveNetwork(json) {
         body: JSON.stringify(network)
     }).then(response => {
         if (response.ok) {
-            alert("Red guardada correctamente");
+            alert("Network saved successfully");
         } else {
-            configError('Error al guardar la red: ' + response.statusText);
+            configError('Error saving the network: ' + response.statusText);
         }
     });
 }
