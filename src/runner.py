@@ -165,7 +165,7 @@ class ScenarioRunner:
 
     def status(self):
         if not self.start_time or not self.running:
-            logger.error("Simulation has not started.")
+            logger.warning("Simulation has not started.")
             return {"error": "Simulation not started."}
 
         # Calculate elapsed and total time

@@ -2,6 +2,7 @@ import yaml
 from enum import Enum
 from typing import Any
 import ipaddress
+import re
 
 
 class LEVEL(Enum):
@@ -103,6 +104,22 @@ def validate_cytoscape_scenario(data: dict[str, Any], level: LEVEL) -> list[str]
     return logs
 
 
+def clean_dict_values(input_dict):
+    # Define a regular expression pattern for allowed characters
+    allowed_pattern = re.compile(r"[a-zA-Z0-9\s.,/:_-]")
+
+    def clean_value(value):
+        if isinstance(value, str):
+            # Filter out illegal characters
+            return "".join(allowed_pattern.findall(value))
+        return value
+
+    # Create a new dictionary with cleaned values
+    cleaned_dict = {key: clean_value(value) for key, value in input_dict.items()}
+
+    return cleaned_dict
+
+
 def parse_cytoscape_json(data: dict[str, Any]) -> str:
     yaml_data = {"nodes": []}
 
@@ -144,6 +161,18 @@ def parse_cytoscape_json(data: dict[str, Any]) -> str:
         node_data = node["data"]
         if node_data["role"] == "master":
             node_data["messages"] = messages_dict[node_data["id"]]
+
+        # Clean data
+
+        if node_data["role"] == "master":
+            for message in node_data["messages"]:
+                message["port"] = int(message["port"])
+                message["slave_id"] = int(message["slave_id"])
+        if node_data["role"] == "slave":
+            node_data["port"] = int(node_data["port"])
+            node_data["slave_id"] = int(node_data["slave_id"])
+            node_data["identity"] = clean_dict_values(node_data["identity"])
+
         yaml_data["nodes"].append(node_data)
 
     # Convert to YAML
