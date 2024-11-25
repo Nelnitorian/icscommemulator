@@ -85,7 +85,7 @@ class DockerComposeGenerator:
             "environment": ["PYTHONUNBUFFERED=1"],
         }
 
-        if role == "master":
+        if role == "slave":
             node["expose"] = ["502"]
 
         if role == "slave":
