@@ -27,7 +27,7 @@ Usage:
             {"role": "slave", ...}
         ]
     }
-    generator = ScenarioConfigGenerator(scenario, "config_path")
+    generator = ScenarioConfigGenerator(scenario, "/tmp/ICSCommEmulator")
     generator.generate()
 """
 
