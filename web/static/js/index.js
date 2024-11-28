@@ -57,7 +57,7 @@ function submitForm(event) {
         masterNodes: parseInt(masterNodes),
         slaveNodes: parseInt(slaveNodes)
     };
-    fetch('/api/network/', {
+    fetch('/api/networks/', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -70,7 +70,7 @@ function submitForm(event) {
         .then(data => {
             if (data.status === 200) {
                 console.log('Network created and saved successfully: ', data);
-                window.location.href = 'network/' + parsedProjectName; // Redirect after saving
+                window.location.href = 'networks/' + parsedProjectName; // Redirect after saving
             } else {
                 console.error('Error creating the scenario: ', data.error);
                 alert("Error creating the scenario: " + data.error);
@@ -123,7 +123,7 @@ function getNextIpInSubnet(ipAddress, subnet) {
 }
 
 function fetchScenarios() {
-    fetch('/api/network/')
+    fetch('/api/networks/')
         .then(response => response.json())
         .then(data => {
             const scenarioList = document.getElementById('scenario-list');
@@ -143,5 +143,5 @@ function fetchScenarios() {
 }
 
 function loadSelectedScenario(scenario) {
-    window.location.href = 'network/' + scenario;
+    window.location.href = 'networks/' + scenario;
 }

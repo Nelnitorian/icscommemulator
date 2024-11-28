@@ -1253,8 +1253,7 @@ function getCurrentId() {
 
 function saveNetwork(json) {
     let network = JSON.stringify(json);
-    // Send the network to the /api/save_network endpoint
-    fetch('/api/network/' + scenarioId, {
+    fetch('/api/networks/' + scenarioId, {
         method: 'PUT',
         headers: {
             'Content-Type': 'application/json'

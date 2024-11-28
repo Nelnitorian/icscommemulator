@@ -29,14 +29,16 @@ class NetworkAPI:
 
     def setup_routes(self):
         self.app.add_url_rule(
-            "/api/network/", view_func=self.handle_network, methods=["GET", "POST"]
+            "/api/networks/", view_func=self.handle_network, methods=["GET", "POST"]
         )
         self.app.add_url_rule(
-            "/api/network/<name>", view_func=self.handle_network, methods=["GET", "PUT"]
+            "/api/networks/<name>",
+            view_func=self.handle_network,
+            methods=["GET", "PUT"],
         )
         self.app.add_url_rule("/", view_func=self.home)
         self.app.add_url_rule("/index.html", view_func=self.home)
-        self.app.add_url_rule("/network/<id>", view_func=self.network)
+        self.app.add_url_rule("/networks/<id>", view_func=self.network)
         self.app.add_url_rule(
             "/api/run/", view_func=self.handle_run, methods=["GET", "DELETE"]
         )
