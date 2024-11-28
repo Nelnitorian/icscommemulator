@@ -132,9 +132,9 @@ class ScenarioRunner:
             logger.error("Tcpdump process not found.")
 
     def run(self):
-        if ScenarioRunner._is_running:
-            raise Exception("Another scenario is already running.")
         with ScenarioRunner._lock:
+            if ScenarioRunner._is_running:
+                raise Exception("Another scenario is already running.")
             ScenarioRunner._is_running = True
             self.running = True
             try:
