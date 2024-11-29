@@ -1,7 +1,5 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, abort
 import json
-import os
-import sys
 import ipaddress
 
 from src.cytoscape_adapter import (
@@ -49,8 +47,11 @@ class NetworkAPI:
     def handle_network(self, name=None):
         if request.method == "GET":
             if name:
-                scenario = get_cytoscape_scenario(name)
-                return jsonify(scenario), 200
+                try:
+                    scenario = get_cytoscape_scenario(name)
+                    return jsonify(scenario), 200
+                except:
+                    return jsonify({"status": 404, "error": "Network not found"}), 404
             else:
                 scenarios = get_created_scenarios()
                 return jsonify(scenarios), 200
@@ -119,7 +120,10 @@ class NetworkAPI:
         return render_template("index.html")
 
     def network(self, id):
-        network_data = get_cytoscape_scenario(id)
+        try:
+            network_data = get_cytoscape_scenario(id)
+        except Exception:
+            abort(404)
         return render_template("network.html", network_data=network_data)
 
     def handle_run(self, name=None):
@@ -128,6 +132,12 @@ class NetworkAPI:
             simulation_time = data.get("simulation_time")
             try:
                 scenario = get_python_scenario(name)
+            except Exception as e:
+                return (
+                    jsonify({"status": 404, "error": f"Scenario not found: {e}"}),
+                    404,
+                )
+            try:
                 docker_compose_path = "docker-compose.yml"
                 config_path = "/tmp/ICSCommEmulator"
                 self.generate_docker_compose(scenario, docker_compose_path, config_path)
@@ -137,8 +147,8 @@ class NetworkAPI:
                 )
             except Exception as e:
                 return (
-                    jsonify({"status": 400, "error": f"Error running scenario: {e}"}),
-                    400,
+                    jsonify({"status": 500, "error": f"Error running scenario: {e}"}),
+                    500,
                 )
 
             return (
@@ -158,9 +168,9 @@ class NetworkAPI:
             except Exception as e:
                 return (
                     jsonify(
-                        {"status": 400, "error": f"Error fetching scenario status: {e}"}
+                        {"status": 500, "error": f"Error fetching scenario status: {e}"}
                     ),
-                    400,
+                    500,
                 )
 
             return jsonify(scenario_status), 200
@@ -170,8 +180,8 @@ class NetworkAPI:
                 self.stop_scenario()
             except Exception as e:
                 return (
-                    jsonify({"status": 400, "error": f"Error stopping scenario: {e}"}),
-                    400,
+                    jsonify({"status": 500, "error": f"Error stopping scenario: {e}"}),
+                    500,
                 )
 
             return jsonify({"message": "Scenario stopped"}), 200
