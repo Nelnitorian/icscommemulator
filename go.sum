@@ -15,6 +15,8 @@ github.com/stretchr/testify v1.11.0 h1:ib4sjIrwZKxE5u/Japgo/7SJV3PvgjGiRNAvTVGqQ
 github.com/stretchr/testify v1.11.0/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
 github.com/tbrandon/mbserver v0.0.0-20231208015628-36eb59221ac2 h1:2H0HcvMX8JEa4HD32KJNBMwOBmCLs9xYOWVE8ig06Ss=
 github.com/tbrandon/mbserver v0.0.0-20231208015628-36eb59221ac2/go.mod h1:qUzPVlSj2UgxJkVbH0ZwuuiR46U8RBMDT5KLY78Ifpw=
+github.com/wendy512/go-iecp5 v1.2.3 h1:1PCoKzTFmf9Azx2BxoE8k0uH338kUYLnb4PipGHMhXw=
+github.com/wendy512/go-iecp5 v1.2.3/go.mod h1:d5koVsFZF0IV2JYznykSLJy6d29mHvXlNqm6GvvJQ0k=
 golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8 h1:0A+M6Uqn+Eje4kHMK80dtF3JCXC4ykBgQG4Fe06QRhQ=
 golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405 h1:yhCVgyC4o1eVCa2tZl7eS0r+SDo693bJlVdllGtEeKM=
