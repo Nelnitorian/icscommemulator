@@ -461,8 +461,7 @@ func TestIEC104DataPointResponse(t *testing.T) {
 
 func TestIEC104RecurrentCommands(t *testing.T) {
     logrus.SetLevel(logrus.FatalLevel)
-    
-    // Create a master config with recurrent commands (short interval for testing)
+
     recurrentConfig := `timestamp,ip,port,station_addr,info_addr,command_type,value,recurrent,interval
 1,127.0.0.1,2404,1,0,C_IC_NA_1,,true,0.5
 2,127.0.0.1,2404,1,1,C_SC_NA_1,true,false,0`
@@ -470,28 +469,41 @@ func TestIEC104RecurrentCommands(t *testing.T) {
     suite := NewIEC104TestSuite(t)
     suite.SetUp()
     defer suite.TearDown()
-    
-    // Override master config with recurrent operations
+
+    // Override master config
     require.NoError(t, os.WriteFile(suite.masterConfigPath, []byte(recurrentConfig), 0644))
-    
+
     // Start the slave server
     require.NoError(t, suite.startSlave())
     assert.True(t, suite.waitForSlaveStartup(10*time.Second))
-    
     time.Sleep(500 * time.Millisecond)
+
+    ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+    defer cancel()
     
-    // Run the master
-    output, err := suite.runMaster()
+    // Run the master con timeout
+    masterBinary := filepath.Join(suite.tempDir, "master")
+    cmd := exec.CommandContext(ctx, masterBinary)
+    cmd.Dir = suite.tempDir
+    cmd.Env = append(os.Environ(), fmt.Sprintf("MASTER_CONFIG=%s", suite.masterConfigPath))
+    
+    output, err := cmd.CombinedOutput()
+    
     t.Logf("Recurrent operations output: %s", string(output))
-    
-    assert.NoError(t, err, "Recurrent operations should succeed")
-    
+
+    // ¡CAMBIO! Esperamos que termine por timeout (es normal)
+    if ctx.Err() == context.DeadlineExceeded {
+        t.Log("Test completed with timeout as expected for recurrent commands")
+    } else {
+        assert.NoError(t, err, "Recurrent operations should succeed")
+    }
+
     outputStr := string(output)
-    
-    // Should see multiple interrogation commands due to recurrent nature
+    // Verificar que se ejecutaron múltiples comandos
     interrogationCount := strings.Count(outputStr, "C_IC_NA_1")
-    assert.Greater(t, interrogationCount, 1, "Should perform multiple interrogation commands due to recurrent setting")
+    assert.Greater(t, interrogationCount, 5, "Should perform multiple interrogation commands")
 }
+
 
 func TestMain(m *testing.M) {
     // Setup code that runs before all tests

@@ -1,0 +1,37 @@
+# Build stage
+FROM golang:1.21-alpine AS build
+
+WORKDIR /app
+
+# Install git for go mod download
+RUN apk add --no-cache git
+
+# Initialize module and install dependencies
+COPY main.go ./
+RUN go mod init iec104-master && \
+    go get github.com/sirupsen/logrus@v1.9.3 && \
+    go get gopkg.in/yaml.v3@v3.0.1 && \
+    go get github.com/wendy512/go-iecp5@v1.2.3
+
+# Build the application
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o master ./main.go
+
+# Final stage
+FROM alpine:latest
+
+# Add ca-certificates for HTTPS requests (if needed)
+RUN apk --no-cache add ca-certificates tzdata
+
+WORKDIR /app
+
+# Copy the binary from build stage
+COPY --from=build /app/master ./master
+
+# Make sure the binary is executable
+RUN chmod +x ./master
+
+# Expose IEC104 TCP port
+EXPOSE 2404
+
+# Run the master application
+ENTRYPOINT ["./master"]

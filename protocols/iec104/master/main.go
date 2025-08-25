@@ -177,11 +177,21 @@ func (m *IEC104Master) connect(ip string, port int) error {
 
     // Set connection handlers
     connectionEstablished := make(chan bool, 1)
-    
+    serverActivated := make(chan bool, 1)
+
     m.client.SetOnConnectHandler(func(c *cs104.Client) {
         m.logger.Info("Connected to IEC 60870-5-104 server")
         select {
         case connectionEstablished <- true:
+        default:
+        }
+    })
+
+    // ¡NUEVO! Handler para cuando el servidor se active
+    m.client.SetServerActiveHandler(func(c *cs104.Client) {
+        m.logger.Info("Server is now active")
+        select {
+        case serverActivated <- true:
         default:
         }
     })
@@ -199,12 +209,25 @@ func (m *IEC104Master) connect(ip string, port int) error {
     select {
     case <-connectionEstablished:
         m.logger.Info("Connection established successfully")
-        // Give a bit more time for the connection to stabilize
-        time.Sleep(200 * time.Millisecond)
-        return nil
-    case <-time.After(5 * time.Second):
+    case <-time.After(10 * time.Second):
         return fmt.Errorf("connection timeout")
     }
+
+    // ¡NUEVO! Enviar STARTDT para activar el servidor
+    m.logger.Info("Sending STARTDT to activate server")
+    m.client.SendStartDt()
+
+    // ¡NUEVO! Esperar a que el servidor se active
+    select {
+    case <-serverActivated:
+        m.logger.Info("Server activation confirmed")
+    case <-time.After(5 * time.Second):
+        m.logger.Warn("Server activation timeout, continuing anyway")
+    }
+
+    // Give a bit more time for the connection to stabilize
+    time.Sleep(200 * time.Millisecond)
+    return nil
 }
 
 
@@ -412,7 +435,6 @@ func (m *IEC104Master) sendCommand(cmd Command) error {
 
 func (m *IEC104Master) loop() error {
     currentTime := 0.0
-
     // Connect to first server
     if len(m.commands) > 0 {
         firstCmd := m.commands[0]
@@ -420,8 +442,13 @@ func (m *IEC104Master) loop() error {
         if err != nil {
             return err
         }
-        defer m.client.Close()
-        
+        defer func() {
+            // ¡NUEVO! Enviar STOPDT antes de cerrar
+            m.logger.Info("Sending STOPDT to deactivate server")
+            m.client.SendStopDt()
+            m.client.Close()
+        }()
+
         // Additional wait to ensure connection is stable
         time.Sleep(500 * time.Millisecond)
     }

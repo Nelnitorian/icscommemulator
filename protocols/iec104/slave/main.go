@@ -48,7 +48,7 @@ type IEC104Slave struct {
     config      SlaveConfig
     syncFile    string
     logger      *logrus.Logger
-    server      cs104.ServerSpecial
+    server      *cs104.Server
     handler     *ServerHandler
     dataPoints  map[asdu.InfoObjAddr]interface{} // IOA -> value mapping
 }
@@ -157,50 +157,42 @@ func (s *IEC104Slave) getStationAddr() int {
 func (s *IEC104Slave) start() error {
     port := s.getPort()
     stationAddr := s.getStationAddr()
-    
+    address := fmt.Sprintf("%s:%d", s.config.IP, port)
+
     // Initialize data points
     s.setupDataPoints()
-    
-    // Create server option
-    option := cs104.NewOption()
-    if err := option.AddRemoteServer(fmt.Sprintf("%s:%d", s.config.IP, port)); err != nil {
-        return fmt.Errorf("failed to add remote server: %w", err)
-    }
-    
-    // Create server
-    s.server = cs104.NewServerSpecial(s.handler, option)
-    
+
+    // ¡CAMBIO PRINCIPAL! Usar Server en lugar de ServerSpecial
+    s.server = cs104.NewServer(s.handler)
+
     // Set connection handlers
-    s.server.SetOnConnectHandler(func(c asdu.Connect) {
+    s.server.SetOnConnectionHandler(func(c asdu.Connect) {
         s.logger.Info("Client connected")
     })
-    
     s.server.SetConnectionLostHandler(func(c asdu.Connect) {
         s.logger.Info("Client disconnected")
     })
-    
-    s.logger.Infof("Starting IEC 60870-5-104 Server on %s:%d (Station: %d)", 
-        s.config.IP, port, stationAddr)
-    
+
+    s.logger.Infof("Starting IEC 60870-5-104 Server on %s (Station: %d)",
+        address, stationAddr)
+
     // Create sync file
     if err := s.touchSyncFile(); err != nil {
         return fmt.Errorf("failed to create sync file: %w", err)
     }
-    
-    // Start server
-    if err := s.server.Start(); err != nil {
-        return fmt.Errorf("failed to start server: %w", err)
-    }
-    
-    time.Sleep(100 * time.Millisecond)
-    
+
+    // ¡CAMBIO PRINCIPAL! Usar ListenAndServer en lugar de Start
+    go func() {
+        s.server.ListenAndServer(address)
+    }()
+
+    s.logger.Info("Server started successfully, waiting for signals...")
+
     // Wait for interrupt signal
     sigChan := make(chan os.Signal, 1)
     signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-    
-    s.logger.Info("Server started successfully, waiting for signals...")
     <-sigChan
-    
+
     s.logger.Info("Received shutdown signal")
     return s.shutdown()
 }
@@ -232,12 +224,12 @@ func (s *IEC104Slave) shutdown() error {
     if s.server != nil {
         s.server.Close()
     }
-    
+
     // Remove sync file
     if err := os.Remove(s.syncFile); err != nil && !os.IsNotExist(err) {
         s.logger.WithError(err).Warn("Failed to remove sync file")
     }
-    
+
     s.logger.Info("Server shutdown completed")
     return nil
 }
