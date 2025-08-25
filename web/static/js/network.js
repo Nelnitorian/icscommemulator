@@ -1252,13 +1252,12 @@ function getCurrentId() {
 }
 
 function saveNetwork(json) {
-    let network = JSON.stringify(json);
     fetch('/api/networks/' + scenarioId, {
         method: 'PUT',
         headers: {
             'Content-Type': 'application/json'
         },
-        body: JSON.stringify(network)
+        body: JSON.stringify(json)
     }).then(response => {
         if (response.ok) {
             alert("Network saved successfully");
@@ -1369,3 +1368,102 @@ function verifyNetworkData(data) {
 
     return logs;
 }
+
+// Function to save scenario
+function saveScenario() {
+    logger.Debug("Saving scenario: " + scenarioId);
+    
+    // Get the current state of the network
+    const scenarioData = {
+        protocol: networkData.protocol,
+        ip_network: networkData.ip_network,
+        nodes: cy.nodes().map(node => ({
+            data: node.data(),
+            classes: node.classes().join(' '),
+            position: node.position()
+        })),
+        edges: cy.edges().map(edge => ({
+            data: edge.data()
+        }))
+    };
+    
+    logger.Debug("Scenario data to save:", JSON.stringify(scenarioData));
+    
+    // Send PUT request - IMPORTANTE: NO hacer doble JSON.stringify()
+    fetch(`/api/networks/${scenarioId}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(scenarioData)  // ← SOLO un stringify aquí
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(err => {
+                throw new Error(err.error || 'Failed to save scenario');
+            });
+        }
+        return response.json();
+    })
+    .then(data => {
+        logger.Info("Scenario saved successfully:", data.message);
+        // Optionally show success message to user
+        showSuccessMessage("Scenario saved successfully");
+    })
+    .catch(error => {
+        logger.Error("Error saving scenario:", error.message);
+        configError(`Error saving scenario: ${error.message}`);
+    });
+}
+
+// Auto-save functionality
+function enableAutoSave() {
+    let saveTimeout;
+    
+    // Save when nodes or edges change
+    cy.on('add remove data', function(evt) {
+        clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(saveScenario, 2000); // Auto-save after 2 seconds of inactivity
+    });
+}
+
+// Success message function
+function showSuccessMessage(message) {
+    // Create or update a success message element
+    let successElement = document.getElementById('success-message');
+    if (!successElement) {
+        successElement = document.createElement('div');
+        successElement.id = 'success-message';
+        successElement.style.position = 'fixed';
+        successElement.style.top = '20px';
+        successElement.style.right = '20px';
+        successElement.style.background = '#4CAF50';
+        successElement.style.color = 'white';
+        successElement.style.padding = '10px 20px';
+        successElement.style.borderRadius = '4px';
+        successElement.style.zIndex = '9999';
+        document.body.appendChild(successElement);
+    }
+    
+    successElement.textContent = message;
+    successElement.style.display = 'block';
+    
+    // Hide after 3 seconds
+    setTimeout(() => {
+        successElement.style.display = 'none';
+    }, 3000);
+}
+
+// Call this when the page loads
+document.addEventListener('DOMContentLoaded', function() {
+    // ... existing DOMContentLoaded code ...
+    
+    // Enable auto-save
+    enableAutoSave();
+    
+    // Manual save button (if you want to add one)
+    const saveButton = document.getElementById('save-button');
+    if (saveButton) {
+        saveButton.addEventListener('click', saveScenario);
+    }
+});

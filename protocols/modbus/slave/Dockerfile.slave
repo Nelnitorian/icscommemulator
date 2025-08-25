@@ -1,14 +1,37 @@
-# Use an official Python runtime as a parent image
-FROM python:3.10.0-alpine
+# Build stage
+FROM golang:1.21-alpine AS build
 
-# Set the working directory in the container to /app
 WORKDIR /app
 
-# Add the main script into the container at /app
-COPY ./slave.py /app
+# Install git for go mod download
+RUN apk add --no-cache git
 
-# Install any needed packages
-RUN pip install --no-cache-dir pymodbus pyyaml
+# Initialize module and install dependencies
+COPY main.go ./
+RUN go mod init modbus-slave && \
+    go get github.com/tbrandon/mbserver@v0.0.0-20231208015628-36eb59221ac2 && \
+    go get github.com/sirupsen/logrus@v1.9.3 && \
+    go get gopkg.in/yaml.v3@v3.0.1
 
-# Run slave.py when the container launches
-ENTRYPOINT ["python", "slave.py"]
+# Build the application
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o slave ./main.go
+
+# Final stage
+FROM alpine:latest
+
+# Add ca-certificates for HTTPS requests (if needed)
+RUN apk --no-cache add ca-certificates tzdata
+
+WORKDIR /app
+
+# Copy the binary from build stage
+COPY --from=build /app/slave ./slave
+
+# Make sure the binary is executable
+RUN chmod +x ./slave
+
+# Expose Modbus TCP port
+EXPOSE 502
+
+# Run the slave application
+ENTRYPOINT ["./slave"]
