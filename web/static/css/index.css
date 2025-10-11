@@ -1,116 +1,338 @@
+/* ===================================
+   VARIABLES & RESET
+   =================================== */
+:root {
+    --primary-color: #2563eb;
+    --primary-hover: #1d4ed8;
+    --secondary-color: #64748b;
+    --secondary-hover: #475569;
+    --success-color: #10b981;
+    --success-hover: #059669;
+    --danger-color: #ef4444;
+    --danger-hover: #dc2626;
+    --background: #f8fafc;
+    --surface: #ffffff;
+    --border-color: #e2e8f0;
+    --text-primary: #1e293b;
+    --text-secondary: #64748b;
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    --radius-sm: 0.375rem;
+    --radius-md: 0.5rem;
+    --radius-lg: 0.75rem;
+    --transition: all 0.2s ease;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* ===================================
+   GLOBAL STYLES
+   =================================== */
 body {
-    font-family: 'Roboto', sans-serif;
+    font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    color: var(--text-primary);
+    line-height: 1.6;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem 1rem;
+}
+
+/* ===================================
+   HEADER
+   =================================== */
+.page-header {
     text-align: center;
-    padding: 50px;
-}
-.button {
-    display: inline-block;
-    margin: 20px;
-    padding: 15px 25px;
-    font-size: 16px;
-    cursor: pointer;
-    background-color: #007BFF;
-    color: white;
-    border: none;
-    border-radius: 5px;
-    text-decoration: none;
-}
-.button:hover {
-    background-color: #0056b3;
-}
-.button.active {
-    background-color: #28a745;
-}
-.button.cancel {
-    background-color: #dc3545;
-}
-.form-container {
-    display: none;
-    margin-top: 20px;
-}
-.form-container input, .form-container select {
-    display: block;
-    margin: 10px auto;
-    padding: 10px;
+    margin-bottom: 3rem;
+    animation: fadeInDown 0.6s ease;
 }
 
-#form-container{
-    padding-top: 20px;
-    /* background-color: #f9f9f9;
-    border-radius: 10px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-    max-width: 600px; */
+.page-header h1 {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--surface);
+    margin-bottom: 0.5rem;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-#scenario-form{
+.subtitle {
+    font-size: 1.125rem;
+    color: rgba(255, 255, 255, 0.9);
+    font-weight: 300;
+}
+
+/* ===================================
+   MAIN CONTENT
+   =================================== */
+.main-content {
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    padding: 2.5rem;
+    animation: fadeInUp 0.6s ease;
+}
+
+/* ===================================
+   BUTTONS
+   =================================== */
+.action-buttons {
     display: flex;
-    align-items: center;
+    gap: 1rem;
     justify-content: center;
-    flex-direction: column;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
 }
 
-.single-line {
-    display: grid;
-    grid-template-columns: 2fr 2fr;
+.button {
+    display: inline-flex;
     align-items: center;
-    gap: 10px;
-    width: 25%;
-    margin-bottom: 10px;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 500;
+    border: none;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: var(--transition);
+    text-decoration: none;
+    box-shadow: var(--shadow-sm);
 }
 
-.single-line label {
-    justify-self: end;
-    margin-right: 10px;
+.button-icon {
+    font-size: 1.25rem;
 }
 
-.single-line input, .single-line select {
-    justify-self: start;
+.button-primary {
+    background: var(--primary-color);
+    color: white;
 }
 
-#load-container {
+.button-primary:hover {
+    background: var(--primary-hover);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.button-primary.active {
+    background: var(--success-color);
+}
+
+.button-secondary {
+    background: var(--secondary-color);
+    color: white;
+}
+
+.button-secondary:hover {
+    background: var(--secondary-hover);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.button-secondary.active {
+    background: var(--success-color);
+}
+
+.button-success {
+    background: var(--success-color);
+    color: white;
+}
+
+.button-success:hover {
+    background: var(--success-hover);
+}
+
+.button-cancel {
+    background: var(--danger-color);
+    color: white;
+}
+
+.button-cancel:hover {
+    background: var(--danger-hover);
+}
+
+/* ===================================
+   FORM STYLES
+   =================================== */
+.form-container,
+.load-container {
     display: none;
-    margin-top: 20px;
-    padding: 20px;
-    /* background-color: #f9f9f9; */
-    border-radius: 10px;
-    /* box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); */
-    max-width: 600px;
-    margin: 20px auto;
-    transition: all 0.3s ease;
+    animation: fadeIn 0.4s ease;
 }
 
-/* Animation for the container appearance */
-#load-container.show {
+.form-container.show,
+.load-container.show {
     display: block;
-    opacity: 0;
-    animation: fadeIn 0.5s forwards;
 }
 
+.section-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 2px solid var(--border-color);
+}
+
+#scenario-form {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.form-group {
+    margin-bottom: 1.25rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.form-group input,
+.form-group select {
+    width: 100%;
+    padding: 0.75rem;
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    font-size: 1rem;
+    transition: var(--transition);
+    font-family: inherit;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.form-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 2rem;
+    justify-content: flex-end;
+}
+
+/* ===================================
+   SCENARIO GRID
+   =================================== */
+.scenario-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 1.25rem;
+    margin-top: 1.5rem;
+}
+
+.scenario-item {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
+    color: white;
+    padding: 1.5rem;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: var(--transition);
+    box-shadow: var(--shadow-sm);
+    font-weight: 500;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.scenario-item::before {
+    content: '📊';
+    font-size: 2rem;
+    display: block;
+    margin-bottom: 0.5rem;
+    opacity: 0.8;
+}
+
+.scenario-item:hover {
+    transform: translateY(-5px) scale(1.02);
+    box-shadow: var(--shadow-lg);
+}
+
+.scenario-item:active {
+    transform: translateY(-2px);
+}
+
+/* ===================================
+   ANIMATIONS
+   =================================== */
 @keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
     to {
         opacity: 1;
     }
 }
 
-/* Style the scenario list */
-#scenario-list {
-    margin-top: 20px;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
-#scenario-list div {
-    background-color: #007BFF;
-    color: white;
-    padding: 15px;
-    border-radius: 5px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    cursor: pointer;
-    transition: transform 0.2s ease, background-color 0.2s ease;
+@keyframes fadeInDown {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
-#scenario-list div:hover {
-    background-color: #0056b3;
-    transform: translateY(-5px);
+/* ===================================
+   RESPONSIVE DESIGN
+   =================================== */
+@media (max-width: 768px) {
+    .page-header h1 {
+        font-size: 2rem;
+    }
+
+    .main-content {
+        padding: 1.5rem;
+    }
+
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+
+    .action-buttons {
+        flex-direction: column;
+    }
+
+    .button {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .scenario-grid {
+        grid-template-columns: 1fr;
+    }
 }

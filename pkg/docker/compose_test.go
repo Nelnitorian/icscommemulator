@@ -2,172 +2,248 @@ package docker
 
 import (
 	"os"
-	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 )
 
 func TestNewGenerator(t *testing.T) {
-	protocol := "modbus"
-	filePath := "test-compose.yml"
-	configPath := "/tmp/test"
+	gen := NewGenerator("/tmp/config", "modbus")
 
-	generator := NewGenerator(protocol, filePath, configPath)
+	if gen.configPath != "/tmp/config" {
+		t.Errorf("Expected configPath '/tmp/config', got '%s'", gen.configPath)
+	}
 
-	assert.Equal(t, protocol, generator.protocol)
-	assert.Equal(t, filePath, generator.path)
-	assert.Equal(t, configPath, generator.configPath)
-	assert.NotNil(t, generator.services)
-	assert.NotNil(t, generator.networks)
+	if gen.protocol != "modbus" {
+		t.Errorf("Expected protocol 'modbus', got '%s'", gen.protocol)
+	}
+
+	if gen.compose.Version != "3.8" {
+		t.Errorf("Expected Docker Compose version '3.8', got '%s'", gen.compose.Version)
+	}
 }
 
 func TestAddNetwork(t *testing.T) {
-	generator := NewGenerator("modbus", "test.yml", "/tmp")
-	
-	err := generator.AddNetwork("testnet", "172.20.0.0/16")
-	require.NoError(t, err)
+	gen := NewGenerator("/tmp/config", "modbus")
+	gen.AddNetwork("test_network", "192.168.1.0/24")
 
-	assert.Contains(t, generator.networks, "testnet")
-	network := generator.networks["testnet"]
-	assert.Equal(t, "testnet", network.Name)
-	assert.NotNil(t, network.IPAM)
+	network, exists := gen.compose.Networks["test_network"]
+	if !exists {
+		t.Fatal("Network 'test_network' was not added")
+	}
+
+	if network.Driver != "bridge" {
+		t.Errorf("Expected driver 'bridge', got '%s'", network.Driver)
+	}
+
+	if len(network.IPAM.Config) == 0 {
+		t.Fatal("IPAM config is empty")
+	}
+
+	if network.IPAM.Config[0].Subnet != "192.168.1.0/24" {
+		t.Errorf("Expected subnet '192.168.1.0/24', got '%s'", network.IPAM.Config[0].Subnet)
+	}
 }
 
-func TestAddNode(t *testing.T) {
-	tempDir := t.TempDir()
-	generator := NewGenerator("modbus", filepath.Join(tempDir, "test.yml"), tempDir)
-	
-	// Add network first
-	err := generator.AddNetwork("testnet", "172.20.0.0/16")
-	require.NoError(t, err)
+func TestAddMasterService(t *testing.T) {
+	gen := NewGenerator("/tmp/config", "modbus")
+	gen.AddNetwork("ics_network", "192.168.1.0/24")
 
-	// Add master node
-	err = generator.AddNode("master", 0, "172.20.0.10", "", nil)
-	require.NoError(t, err)
+	err := gen.AddMasterService(0, "192.168.1.10", "ics_network")
+	if err != nil {
+		t.Fatalf("AddMasterService() error = %v", err)
+	}
 
-	// Add slave node
-	err = generator.AddNode("slave", 0, "172.20.0.11", "", nil)
-	require.NoError(t, err)
+	service, exists := gen.compose.Services["master_0"]
+	if !exists {
+		t.Fatal("Master service was not added")
+	}
 
-	// Verify services were created
-	assert.Contains(t, generator.services, "modbus_master_0")
-	assert.Contains(t, generator.services, "modbus_slave_0")
+	if service.Container != "master_0" {
+		t.Errorf("Expected container name 'master_0', got '%s'", service.Container)
+	}
 
-	masterService := generator.services["modbus_master_0"]
-	assert.Equal(t, "modbus_master_image", masterService.Image)
-	assert.Contains(t, masterService.Networks, "testnet")
+	if service.Build == nil {
+		t.Fatal("Build config is nil")
+	}
 
-	slaveService := generator.services["modbus_slave_0"]
-	assert.Equal(t, "modbus_slave_image", slaveService.Image)
-	assert.NotEmpty(t, slaveService.Expose)
-	assert.NotNil(t, slaveService.HealthCheck)
+	expectedContext := "./protocols/modbus/master"
+	if service.Build.Context != expectedContext {
+		t.Errorf("Expected build context '%s', got '%s'", expectedContext, service.Build.Context)
+	}
+}
+
+func TestAddSlaveService(t *testing.T) {
+	gen := NewGenerator("/tmp/config", "modbus")
+	gen.AddNetwork("ics_network", "192.168.1.0/24")
+
+	err := gen.AddSlaveService(0, "192.168.1.20", "ics_network", 502, nil)
+	if err != nil {
+		t.Fatalf("AddSlaveService() error = %v", err)
+	}
+
+	service, exists := gen.compose.Services["slave_0"]
+	if !exists {
+		t.Fatal("Slave service was not added")
+	}
+
+	if service.Container != "slave_0" {
+		t.Errorf("Expected container name 'slave_0', got '%s'", service.Container)
+	}
+
+	if len(service.Expose) == 0 {
+		t.Fatal("Expose ports not set")
+	}
+
+	if service.Expose[0] != "502" {
+		t.Errorf("Expected exposed port '502', got '%s'", service.Expose[0])
+	}
+
+	if service.HealthCheck == nil {
+		t.Fatal("Health check not configured")
+	}
+}
+
+func TestAddSlaveServiceWithDependencies(t *testing.T) {
+	gen := NewGenerator("/tmp/config", "modbus")
+	gen.AddNetwork("ics_network", "192.168.1.0/24")
+
+	// Add first slave without dependencies
+	gen.AddSlaveService(0, "192.168.1.20", "ics_network", 502, nil)
+
+	// Add second slave with dependency on first
+	deps := []string{"slave_0"}
+	err := gen.AddSlaveService(1, "192.168.1.21", "ics_network", 502, deps)
+	if err != nil {
+		t.Fatalf("AddSlaveService() with dependencies error = %v", err)
+	}
+
+	service := gen.compose.Services["slave_1"]
+	if len(service.DependsOn) == 0 {
+		t.Fatal("Dependencies not set")
+	}
+
+	if _, exists := service.DependsOn["slave_0"]; !exists {
+		t.Error("Expected dependency on 'slave_0' not found")
+	}
 }
 
 func TestGenerate(t *testing.T) {
-	tempDir := t.TempDir()
-	filePath := filepath.Join(tempDir, "docker-compose.yml")
-	generator := NewGenerator("modbus", filePath, tempDir)
+	tmpFile := "/tmp/test-compose.yml"
+	defer os.Remove(tmpFile)
 
-	// Add network and nodes
-	err := generator.AddNetwork("testnet", "172.20.0.0/16")
-	require.NoError(t, err)
+	gen := NewGenerator("/tmp/config", "modbus")
+	gen.AddNetwork("ics_network", "192.168.1.0/24")
+	gen.AddMasterService(0, "192.168.1.10", "ics_network")
+	gen.AddSlaveService(0, "192.168.1.20", "ics_network", 502, nil)
 
-	err = generator.AddNode("master", 0, "172.20.0.10", "", nil)
-	require.NoError(t, err)
-
-	err = generator.AddNode("slave", 0, "172.20.0.11", "", nil)
-	require.NoError(t, err)
-
-	// Generate file
-	err = generator.Generate()
-	require.NoError(t, err)
-
-	// Verify file exists and is valid YAML
-	assert.FileExists(t, filePath)
-
-	content, err := os.ReadFile(filePath)
-	require.NoError(t, err)
-
-	var compose map[string]interface{}
-	err = yaml.Unmarshal(content, &compose)
-	require.NoError(t, err)
-
-	assert.Contains(t, compose, "services")
-	assert.Contains(t, compose, "networks")
-}
-
-func TestParse(t *testing.T) {
-	tempDir := t.TempDir()
-	filePath := filepath.Join(tempDir, "docker-compose.yml")
-	generator := NewGenerator("modbus", filePath, tempDir)
-
-	scenario := Scenario{
-		Protocol:  "modbus",
-		IPNetwork: "172.20.0.0/16",
-		Nodes: []ScenarioNode{
-			{Role: "master", IP: "172.20.0.10"},
-			{Role: "slave", IP: "172.20.0.11"},
-		},
+	err := gen.Generate(tmpFile)
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
 	}
 
-	err := generator.Parse(scenario, filePath, tempDir)
-	require.NoError(t, err)
+	// Verify file was created
+	if _, err := os.Stat(tmpFile); os.IsNotExist(err) {
+		t.Fatal("Docker Compose file was not created")
+	}
 
-	// Verify file was generated
-	assert.FileExists(t, filePath)
+	// Read and parse the generated file
+	data, err := os.ReadFile(tmpFile)
+	if err != nil {
+		t.Fatalf("Failed to read generated file: %v", err)
+	}
 
-	// Verify services were created
-	assert.Contains(t, generator.services, "modbus_master_0")
-	assert.Contains(t, generator.services, "modbus_slave_0")
-}
+	var compose DockerCompose
+	err = yaml.Unmarshal(data, &compose)
+	if err != nil {
+		t.Fatalf("Failed to parse generated YAML: %v", err)
+	}
 
-func TestValidate(t *testing.T) {
-	tempDir := t.TempDir()
-	filePath := filepath.Join(tempDir, "docker-compose.yml")
-	generator := NewGenerator("modbus", filePath, tempDir)
+	// Verify structure
+	if compose.Version != "3.8" {
+		t.Errorf("Expected version '3.8', got '%s'", compose.Version)
+	}
 
-	// Add minimal configuration
-	err := generator.AddNetwork("testnet", "172.20.0.0/16")
-	require.NoError(t, err)
+	if len(compose.Services) != 2 {
+		t.Errorf("Expected 2 services, got %d", len(compose.Services))
+	}
 
-	err = generator.AddNode("slave", 0, "172.20.0.11", "", nil)
-	require.NoError(t, err)
-
-	// Test validation (will create file first)
-	isValid := generator.Validate()
-	
-	// Note: This test assumes docker-compose is available
-	// In a real test environment, you might want to mock this
-	if isValid {
-		assert.True(t, isValid)
-	} else {
-		t.Skip("docker-compose not available or configuration invalid")
+	if len(compose.Networks) != 1 {
+		t.Errorf("Expected 1 network, got %d", len(compose.Networks))
 	}
 }
 
-// Funciones helper para los tipos que faltan - ajusta según tu implementación real
-func TestHelperFunctions(t *testing.T) {
-	nodes := []ScenarioNode{
-		{Role: "master"},
-		{Role: "slave"},
-		{Role: "master"},
+func TestParsePort(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    interface{}
+		expected int
+		wantErr  bool
+	}{
+		{"Int port", 502, 502, false},
+		{"Float port", 502.0, 502, false},
+		{"String port", "502", 502, false},
+		{"Invalid string", "abc", 0, true},
+		{"Nil port", nil, 0, true},
 	}
 
-	// Implementa estas funciones según tu lógica real
-	masterCount := 0
-	slaveCount := 0
-	
-	for _, node := range nodes {
-		if node.Role == "master" {
-			masterCount++
-		} else if node.Role == "slave" {
-			slaveCount++
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := ParsePort(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ParsePort() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if result != tt.expected {
+				t.Errorf("ParsePort() = %d, want %d", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGetNetworkSubnet(t *testing.T) {
+	subnet, err := GetNetworkSubnet("192.168.1.0", 24)
+	if err != nil {
+		t.Fatalf("GetNetworkSubnet() error = %v", err)
 	}
 
-	assert.Equal(t, 2, masterCount)
-	assert.Equal(t, 1, slaveCount)
+	expected := "192.168.1.0/24"
+	if subnet != expected {
+		t.Errorf("Expected subnet '%s', got '%s'", expected, subnet)
+	}
+}
+
+func TestProtocolDockerfiles(t *testing.T) {
+	protocols := []string{"modbus", "dnp3", "iec104"}
+
+	for _, protocol := range protocols {
+		t.Run(protocol, func(t *testing.T) {
+			gen := NewGenerator("/tmp/config", protocol)
+			masterDockerfile, slaveDockerfile := gen.getProtocolDockerfiles()
+
+			if masterDockerfile == "" || slaveDockerfile == "" {
+				t.Error("Dockerfiles should not be empty for valid protocol")
+			}
+
+			expectedMaster := "./protocols/" + protocol + "/master/Dockerfile.master"
+			expectedSlave := "./protocols/" + protocol + "/slave/Dockerfile.slave"
+
+			if masterDockerfile != expectedMaster {
+				t.Errorf("Expected master dockerfile '%s', got '%s'", expectedMaster, masterDockerfile)
+			}
+
+			if slaveDockerfile != expectedSlave {
+				t.Errorf("Expected slave dockerfile '%s', got '%s'", expectedSlave, slaveDockerfile)
+			}
+		})
+	}
+}
+
+func TestInvalidProtocol(t *testing.T) {
+	gen := NewGenerator("/tmp/config", "invalid_protocol")
+	masterDockerfile, slaveDockerfile := gen.getProtocolDockerfiles()
+
+	if masterDockerfile != "" || slaveDockerfile != "" {
+		t.Error("Expected empty dockerfiles for invalid protocol")
+	}
 }

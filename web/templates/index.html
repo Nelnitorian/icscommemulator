@@ -1,64 +1,90 @@
 <!DOCTYPE html>
-<html lang="en">
-
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" type="text/css" href="/static/css/roboto.css">
-    <link rel="stylesheet" type="text/css" href="/static/css/index.css">
+    <title>Network Scenario Manager</title>
+    <link rel="stylesheet" href="/static/css/roboto.css">
+    <link rel="stylesheet" href="/static/css/index.css">
+</head>
+<body>
+    <div class="container">
+        <header class="page-header">
+            <h1>Network Scenario Manager</h1>
+            <p class="subtitle">Create and manage network simulation scenarios</p>
+        </header>
+
+        <main class="main-content">
+            <nav class="action-buttons">
+                <button id="newScenarioButton" class="button button-primary" onclick="showForm()">
+                    <span class="button-icon">➕</span>
+                    New Scenario
+                </button>
+                <button id="loadScenarioButton" class="button button-secondary" onclick="loadScenario()">
+                    <span class="button-icon">📂</span>
+                    Load Scenario
+                </button>
+            </nav>
+
+            <!-- New Scenario Form -->
+            <section id="form-container" class="form-container">
+                <h2 class="section-title">Create New Scenario</h2>
+                <form id="scenario-form" onsubmit="submitForm(event)">
+                    <div class="form-group">
+                        <label for="projectName">Project Name</label>
+                        <input type="text" id="projectName" name="projectName" 
+                               placeholder="Enter project name" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ipSubrange">IP Subrange</label>
+                        <input type="text" id="ipSubrange" name="ipSubrange" 
+                               placeholder="192.168.100.0/24" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="protocol">Protocol</label>
+                        <select id="protocol" name="protocol" required>
+                            <option value="modbus">Modbus</option>
+                            <option value="dnp3">DNP3</option>
+                            <option value="iec104">IEC 104</option>
+                        </select>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="masterNodes">Master Nodes</label>
+                            <input type="number" id="masterNodes" name="masterNodes" 
+                                   min="1" value="1" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="slaveNodes">Slave Nodes</label>
+                            <input type="number" id="slaveNodes" name="slaveNodes" 
+                                   min="1" value="2" required>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="button button-cancel" onclick="cancelForm()">
+                            Cancel
+                        </button>
+                        <button type="submit" class="button button-success">
+                            Create Scenario
+                        </button>
+                    </div>
+                </form>
+            </section>
+
+            <!-- Load Scenario Section -->
+            <section id="load-container" class="load-container">
+                <h2 class="section-title">Available Scenarios</h2>
+                <div id="scenario-list" class="scenario-grid"></div>
+            </section>
+        </main>
+    </div>
+
     <script src="/static/js/ipaddr.min.js"></script>
     <script src="/static/js/index.js"></script>
-    <title>ICSCommEmulator</title>
-</head>
-
-<body>
-    <h1>Welcome to ICSCommEmulator</h1>
-
-    <button class="button" id="loadScenarioButton" onclick="loadScenario()">Load Scenario</button>
-    <button class="button" id="newScenarioButton" onclick="showForm()">New Scenario</button>
-
-    <div class="form-container" id="form-container">
-        <h2>Create New Scenario</h2>
-        <form id="scenario-form" onsubmit="submitForm(event)">
-            <div class="single-line">
-                <label for="projectName">Project Name</label>
-                <input type="text" id="projectName" placeholder="My Project" autocomplete="off" required>
-            </div>
-
-            <div class="single-line">
-                <label for="projectName">IP Subrange</label>
-                <input type="text" id="ipSubrange" placeholder="192.168.100.0/24" autocomplete="off" required>
-            </div>
-
-            <div class="single-line">
-                <label for="protocol">Scenario Protocol</label>
-                <select id="protocol" name="protocol" required>
-                    <option value="modbus" selected>Modbus/TCP</option>
-                </select>
-            </div>
-
-            <div class="single-line">
-                <label for="masterNodes">Number of Master Nodes</label>
-                <input type="number" id="masterNodes" placeholder="2" autocomplete="off" required>
-            </div>
-
-            <div class="single-line">
-                <label for="slaveNodes">Number of Slave Nodes</label>
-                <input type="number" id="slaveNodes" placeholder="5" autocomplete="off" required>
-            </div>
-
-            <div class="single-line">
-                <button type="button" class="button cancel" onclick="cancelForm()">Cancel</button>
-                <button type="submit" class="button">Submit</button>
-            </div>
-        </form>
-    </div>
-
-    <div class="form-container" id="load-container" style="display: none;">
-        <h2>Available Scenarios</h2>
-        <div id="scenario-list"></div>
-    </div>
-
 </body>
-
 </html>

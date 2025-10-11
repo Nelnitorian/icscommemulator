@@ -2,12 +2,12 @@ package runner
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -132,31 +132,33 @@ func (r *Runner) GetDockerNetworkInterface() (string, error) {
 
 // GetSystemInterfaceName gets the system interface name for a Docker network
 func (r *Runner) GetSystemInterfaceName(dockerNetworkName string) (string, error) {
-	cmd := exec.Command("docker", "network", "inspect", dockerNetworkName)
-	output, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("failed to inspect docker network: %w", err)
-	}
-	
-	var networkData []struct {
-		ID string `json:"Id"`
-	}
-	
-	err = json.Unmarshal(output, &networkData)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse network inspect output: %w", err)
-	}
-	
-	if len(networkData) == 0 {
-		return "", fmt.Errorf("no network data found")
-	}
-	
-	networkID := networkData[0].ID
-	if len(networkID) < 12 {
-		return "", fmt.Errorf("invalid network ID: %s", networkID)
-	}
-	
-	return "br-" + networkID[:12], nil
+
+	log.Printf("Looking for Docker network: %s", dockerNetworkName)
+    
+    // List all networks to debug
+    debugCmd := exec.Command("docker", "network", "ls")
+    debugOutput, _ := debugCmd.Output()
+    log.Printf("Available networks:\n%s", string(debugOutput))
+
+    // List all networks and filter by name pattern
+    cmd := exec.Command("docker", "network", "ls", "--filter", fmt.Sprintf("name=%s", dockerNetworkName), "--format", "{{.ID}}")
+    output, err := cmd.Output()
+    if err != nil {
+        return "", fmt.Errorf("failed to list docker networks: %w", err)
+    }
+    
+    lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+    if len(lines) == 0 || lines[0] == "" {
+        return "", fmt.Errorf("no network found matching: %s", dockerNetworkName)
+    }
+    
+    // Use the first matching network ID
+    networkID := strings.TrimSpace(lines[0])
+    if len(networkID) < 12 {
+        return "", fmt.Errorf("invalid network ID: %s", networkID)
+    }
+    
+    return fmt.Sprintf("br-%s", networkID[:12]), nil
 }
 
 // StartTcpdump starts network packet capture using tcpdump

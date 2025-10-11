@@ -1,0 +1,51 @@
+# Build stage
+FROM ubuntu:22.04 AS build
+
+WORKDIR /app
+
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    git \
+    libssl-dev \
+    libyaml-cpp-dev \
+    libasio-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Clone and build opendnp3
+RUN git clone --recursive https://github.com/dnp3/opendnp3.git && \
+    cd opendnp3 && \
+    mkdir build && \
+    cd build && \
+    cmake .. -DCMAKE_BUILD_TYPE=Release -DDNP3_ALL=ON -DCMAKE_INSTALL_PREFIX=/usr/local && \
+    make -j$(nproc) && \
+    make install && \
+    ldconfig
+
+# Copy source and build application
+COPY main.cpp ./
+RUN g++ -std=c++14 -O2 -o dnp3_slave main.cpp \
+    -lopendnp3 -lasiodnp3 -lasiopal -lyaml-cpp -pthread \
+    -I/usr/local/include \
+    -L/usr/local/lib
+
+# Final stage
+FROM ubuntu:22.04
+
+RUN apt-get update && apt-get install -y \
+    libssl3 \
+    libyaml-cpp0.7 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy compiled binary and libraries
+COPY --from=build /usr/local/lib/lib*.so* /usr/local/lib/
+COPY --from=build /app/dnp3_slave ./
+RUN ldconfig
+
+# Expose DNP3 TCP port
+EXPOSE 20000
+
+ENTRYPOINT ["./dnp3_slave"]
