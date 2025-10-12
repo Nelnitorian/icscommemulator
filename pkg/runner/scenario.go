@@ -168,30 +168,66 @@ func (r *Runner) StartTcpdump(ctx context.Context, interfaceName string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
+
+	// Build comprehensive tcpdump filter
+	// Filter strategy: capture only ICS protocol traffic, exclude all Docker/network noise
 	
-	// Build tcpdump command
+	filter := buildTcpdumpFilter()
+	
 	args := []string{
 		"-i", interfaceName,
 		"-w", r.outputFile,
-		"-U", "-nn",
-		"not udp port 5353", // filter mDNS
-		"and not udp port 1900", // filter SSDP
+		"-U",  // Packet-buffered output
+		"-nn", // Don't resolve hostnames or port names
+		filter,
 	}
-	
+
 	r.tcpdumpCmd = exec.CommandContext(ctx, "tcpdump", args...)
-	
-	// Redirect stdout and stderr to discard
 	r.tcpdumpCmd.Stdout = nil
 	r.tcpdumpCmd.Stderr = nil
-	
+
 	log.Printf("Starting tcpdump on interface '%s', saving to '%s'", interfaceName, r.outputFile)
+	log.Printf("Filter: %s", filter)
 	
 	err = r.tcpdumpCmd.Start()
 	if err != nil {
 		return fmt.Errorf("failed to start tcpdump: %w", err)
 	}
-	
+
 	return nil
+}
+
+// buildTcpdumpFilter creates a comprehensive filter for ICS protocols only
+func buildTcpdumpFilter() string {
+	// Include only ICS protocol traffic
+	// Modbus TCP: port 502
+	// DNP3: port 20000
+	// IEC 104: port 2404
+	
+	icsProtocolPorts := "(tcp port 502 or tcp port 20000 or tcp port 2404 or arp or icmp)"
+	
+	// Exclude all noise protocols
+	excludeFilters := []string{
+		"not udp port 5353",     // mDNS (Multicast DNS)
+		"not udp port 1900",     // SSDP (Simple Service Discovery Protocol)
+		"not udp port 5355",     // LLMNR (Link-Local Multicast Name Resolution)
+		"not udp port 137",      // NetBIOS Name Service
+		"not udp port 138",      // NetBIOS Datagram Service
+		"not tcp port 139",      // NetBIOS Session Service
+		"not tcp port 445",      // SMB over TCP
+		"not udp port 546",      // DHCPv6 Client
+		"not udp port 547",      // DHCPv6 Server
+		"not ip6",               // Exclude all IPv6 (ICMPv6, etc.)
+		"not igmp",              // Exclude IGMP (multicast management)
+	}
+	
+	// Combine: include ICS ports AND exclude noise
+	filter := icsProtocolPorts
+	for _, exclude := range excludeFilters {
+		filter += " and " + exclude
+	}
+	
+	return filter
 }
 
 // LaunchDockerCompose starts the Docker Compose environment
@@ -382,6 +418,10 @@ func (r *Runner) Stop() error {
 	
 	if err := r.StopDockerCompose(); err != nil {
 		log.Printf("Error stopping docker compose: %v", err)
+	}
+
+	if err := r.CleanConfigFolder(); err != nil {
+		log.Printf("Error cleaning config folder: %v", err)
 	}
 	
 	return nil

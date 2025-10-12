@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 """
 DNP3 Outstation Implementation with YAML Configuration
 Requires: dnp3-python >= 2.13.6, pyyaml
@@ -22,13 +23,14 @@ except ImportError as e:
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
+
 logger = logging.getLogger(__name__)
 
 
 class DNP3Outstation:
     """DNP3 Outstation with YAML configuration support."""
 
-    def __init__(self, config_file: Optional[str] = None):
+    def __init__(self, config_file: Optional[str] = "/app/config/slave.yaml"):
         self.config = (
             self._load_config(config_file) if config_file else self._default_config()
         )
@@ -37,7 +39,6 @@ class DNP3Outstation:
         self.outstation_id = self.config["outstation_id"]
         self.master_id = self.config["master_id"]
         self.outstation = None
-
         logger.info("DNP3 Outstation initialized")
         logger.info(f"  Listening on: {self.ip}:{self.port}")
 
@@ -80,7 +81,6 @@ class DNP3Outstation:
 
     def _initialize_points(self):
         logger.info("Initializing DNP3 points...")
-
         # Analog Inputs
         ai_config = self.config.get("analog_inputs", {})
         ai_initial = {
@@ -118,9 +118,7 @@ class DNP3Outstation:
     def update_analog_input(self, index: int, value: float) -> bool:
         """Update an analog input point."""
         try:
-            # Crear el objeto measurement con la API de pydnp3
             measurement = opendnp3.Analog(float(value))
-            # apply_update usa parámetros posicionales
             self.outstation.apply_update(measurement, index)
             logger.debug(f"Updated AI[{index}] = {value:.2f}")
             return True
@@ -165,7 +163,6 @@ class DNP3Outstation:
         """Simulate realistic SCADA data."""
         sim_config = self.config.get("simulation", {})
         variation_range = sim_config.get("analog_variation_range", 2.0)
-
         ai_config = self.config.get("analog_inputs", {})
         for item in ai_config.get("initial_values", []):
             variation = random.uniform(-variation_range, variation_range)
@@ -193,7 +190,6 @@ class DNP3Outstation:
         sim_config = self.config.get("simulation", {})
         enable_simulation = sim_config.get("enabled", False)
         interval = sim_config.get("interval", 5)
-
         logger.info("DNP3 OUTSTATION RUNNING")
         try:
             counter = 0
@@ -220,7 +216,12 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=str, help="Path to YAML configuration file")
+    parser.add_argument(
+        "--config",
+        type=str,
+        default="/app/config/slave.yaml",
+        help="Path to YAML configuration file",
+    )
     args = parser.parse_args()
 
     outstation = DNP3Outstation(config_file=args.config)

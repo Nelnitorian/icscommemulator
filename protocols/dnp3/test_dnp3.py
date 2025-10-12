@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 """
 Integration tests for DNP3 Master-Outstation communication with configuration files.
 Tests only functionality supported by the dnp3-python library.
@@ -14,8 +15,8 @@ logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 DNP3_AVAILABLE = True
-from dnp3_slave import DNP3Outstation
-from dnp3_master import DNP3Master
+from slave import DNP3Outstation
+from master import DNP3Master
 
 
 @pytest.fixture(scope="module")
@@ -24,12 +25,11 @@ def test_port():
 
 
 @pytest.fixture(scope="module")
-def slave_yaml_config(test_port):
+def slave_yaml_config(test_port, tmp_path_factory):
     yaml_content = f"""ip: 127.0.0.1
 port: {test_port}
 outstation_id: 10
 master_id: 20
-
 analog_inputs:
   count: 20
   initial_values:
@@ -39,7 +39,6 @@ analog_inputs:
       value: 200.5
     - index: 10
       value: -25.3
-
 binary_inputs:
   count: 20
   initial_values:
@@ -47,35 +46,28 @@ binary_inputs:
       value: true
     - index: 1
       value: false
-
 analog_output_status:
   count: 10
   initial_values:
     - index: 0
       value: 50.0
-
 binary_output_status:
   count: 10
   initial_values:
     - index: 0
       value: false
-
 simulation:
   enabled: false
 """
-
-    yaml_file = tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False)
-    yaml_file.write(yaml_content)
-    yaml_file.close()
-    yield yaml_file.name
-    try:
-        os.unlink(yaml_file.name)
-    except:
-        pass
+    # Crear directorio temporal que simula /app/config
+    config_dir = tmp_path_factory.mktemp("config")
+    yaml_file = config_dir / "slave.yaml"
+    yaml_file.write_text(yaml_content)
+    yield str(yaml_file)
 
 
 @pytest.fixture(scope="module")
-def master_csv_config(test_port):
+def master_csv_config(test_port, tmp_path_factory):
     csv_content = f"""timestamp,ip,port,operation_type,group,variation,index,master_id,outstation_id,recurrent,interval,value
 0,127.0.0.1,{test_port},poll_analog_inputs,30,6,,20,10,false,0,
 1,127.0.0.1,{test_port},poll_binary_inputs,1,2,,20,10,false,0,
@@ -83,22 +75,16 @@ def master_csv_config(test_port):
 3,127.0.0.1,{test_port},poll_binary_output_status,10,2,,20,10,false,0,
 4,127.0.0.1,{test_port},poll_analog_inputs,30,6,,20,10,true,2,
 """
-
-    csv_file = tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False)
-    csv_file.write(csv_content)
-    csv_file.close()
-    yield csv_file.name
-    try:
-        os.unlink(csv_file.name)
-    except:
-        pass
+    config_dir = tmp_path_factory.mktemp("config")
+    csv_file = config_dir / "master.csv"
+    csv_file.write_text(csv_content)
+    yield str(csv_file)
 
 
 @pytest.fixture(scope="module")
 def outstation(test_port, slave_yaml_config):
     if not DNP3_AVAILABLE:
         pytest.skip("dnp3-python not available")
-
     station = DNP3Outstation(config_file=slave_yaml_config)
     station.start()
     time.sleep(1)
@@ -110,7 +96,6 @@ def outstation(test_port, slave_yaml_config):
 def master(test_port, master_csv_config, outstation):
     if not DNP3_AVAILABLE:
         pytest.skip("dnp3-python not available")
-
     controller = DNP3Master(
         outstation_ip="127.0.0.1",
         outstation_port=test_port,
@@ -118,7 +103,6 @@ def master(test_port, master_csv_config, outstation):
         outstation_id=10,
         config_file=master_csv_config,
     )
-
     assert controller.connect()
     time.sleep(2)
     yield controller

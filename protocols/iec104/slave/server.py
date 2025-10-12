@@ -14,7 +14,7 @@ import datetime
 
 
 class IEC104Server:
-    def __init__(self, config_file="server_config.yaml"):
+    def __init__(self, config_file="/app/config/slave.yaml"):
         """
         Inicializa el servidor IEC 104 desde archivo de configuración
 

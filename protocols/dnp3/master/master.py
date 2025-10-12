@@ -64,7 +64,7 @@ class DNP3Master:
         outstation_port=20000,
         master_id=2,
         outstation_id=1,
-        config_file: Optional[str] = None,
+        config_file: Optional[str] = "/app/config/master.csv",
     ):
         """
         Initialize DNP3 master station.

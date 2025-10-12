@@ -119,7 +119,7 @@ function save() {
 
 function run() {
     DOM.run.settings.style.display = 'block';
-    DOM.run.simulationTime.value = '60000';
+    DOM.run.simulationTime.value = '100';
     UIUtils.setElementCenter(DOM.run.settings);
 }
 
@@ -131,6 +131,12 @@ function executeRun() {
     const simulationTime = parseInt(DOM.run.simulationTime.value);
     if (!simulationTime || simulationTime <= 0) {
         UIUtils.showError("Invalid simulation time");
+        return;
+    }
+
+    // FIX 2: Validar escenario antes de ejecutar
+    const validation = ClientValidator.validateScenario();
+    if (!ClientValidator.showValidationResults(validation.errors, validation.warnings)) {
         return;
     }
 
@@ -146,19 +152,28 @@ function executeRun() {
 
     console.log('Running simulation', apiData);
 
-    // CAMBIO 1: Endpoint a /api/run
     fetch('/api/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(apiData)
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
     .then(result => {
-        if (result.status === 200) {
-            State.filePath = result.filepath;
-            pollProgress();  // Comenzar polling
+        // FIX 5: El backend devuelve el objeto directamente, no con .status
+        console.log('Run result:', result);
+        
+        if (result.message === "Scenario running" || result.file_path) {
+            State.filePath = result.file_path;
+            pollProgress(); // Comenzar polling
+        } else if (result.error) {
+            throw new Error(result.error);
         } else {
-            throw new Error(result.error || 'Unknown error');
+            throw new Error('Unknown error');
         }
     })
     .catch(error => {
@@ -170,13 +185,20 @@ function executeRun() {
 
 function pollProgress() {
     State.intervalId = setInterval(() => {
-        // CAMBIO 2: GET a /api/run para obtener progreso
         fetch('/api/run', {
             method: 'GET'
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(result => {
-            if (result.status === 200) {
+            // FIX 5: Adaptado al formato real del backend
+            console.log('Progress result:', result);
+            
+            if (result.progress) {
                 const progress = result.progress;
                 DOM.run.timeProgress.textContent = Math.floor(progress.elapsed_time);
                 DOM.run.percentageProgress.textContent = Math.floor(progress.percentage);
@@ -186,14 +208,14 @@ function pollProgress() {
                 if (progress.percentage >= 100 || progress.completed) {
                     clearInterval(State.intervalId);
                     setTimeout(() => {
-                        // CAMBIO 3: Solo mostrar mensaje, NO descargar
                         alert(`Simulation completed! PCAP saved to: ${State.filePath}`);
                         DOM.run.overlay.style.display = 'none';
                     }, 1000);
                 }
             }
         })
-        .catch(() => {
+        .catch(error => {
+            console.error('Error polling progress:', error);
             clearInterval(State.intervalId);
             DOM.run.overlay.style.display = 'none';
         });

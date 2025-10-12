@@ -1,8 +1,12 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"icscommemulator/pkg/logger"
 	"icscommemulator/pkg/web"
@@ -17,17 +21,37 @@ func main() {
 
 	// Configure logging
 	logger.SetLevel(*logLevel)
-	
-	// Create and configure the API
-	api := web.NewNetworkAPI()
-	
-	// Start the server
 	logger.Info("ICS Communication Emulator starting...")
-	logger.Info("Server will be available at http://%s:%d", *host, *port)
-	
-	err := api.Run(*host, *port)
+
+	// Create and configure the server
+	server, err := web.NewServer(*host, *port)
 	if err != nil {
-		logger.Error("Failed to start server: %v", err)
+		logger.Error("Failed to create server: %v", err)
 		os.Exit(1)
 	}
+
+	// Start server in goroutine
+	go func() {
+		logger.Info("Server starting on http://%s:%d", *host, *port)
+		if err := server.Start(); err != nil {
+			logger.Error("Server error: %v", err)
+			os.Exit(1)
+		}
+	}()
+
+	// Wait for interrupt signal for graceful shutdown
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	logger.Info("Shutting down server...")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(ctx); err != nil {
+		logger.Error("Server forced to shutdown: %v", err)
+		os.Exit(1)
+	}
+
+	logger.Info("Server exited successfully")
 }

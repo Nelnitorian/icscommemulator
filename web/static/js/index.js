@@ -59,10 +59,30 @@ const UIState = {
 const IPUtils = {
     parseNetwork(subnet) {
         try {
-            const mask = subnet.split('/')[1];
+            // Validación más robusta del formato CIDR
+            if (!subnet || typeof subnet !== 'string') {
+                return null;
+            }
+            
+            const parts = subnet.split('/');
+            if (parts.length !== 2) {
+                return null;
+            }
+            
+            const mask = parseInt(parts[1]);
+            if (isNaN(mask) || mask < 0 || mask > 32) {
+                return null;
+            }
+            
+            // Validar que la IP base es válida
+            if (!ipaddr.isValid(parts[0])) {
+                return null;
+            }
+            
             const networkAddr = ipaddr.IPv4.networkAddressFromCIDR(subnet);
             return `${networkAddr.toString()}/${mask}`;
         } catch (error) {
+            console.error('Error parsing network:', error);
             return null;
         }
     },

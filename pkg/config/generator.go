@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -135,7 +136,6 @@ func (g *Generator) CraftMaster(messages []Message, index int) error {
 	}
 
 	csvFile := filepath.Join(masterDir, "master.csv")
-	
 	if len(messages) == 0 {
 		file, err := os.Create(csvFile)
 		if err != nil {
@@ -183,7 +183,6 @@ func (g *Generator) CraftMaster(messages []Message, index int) error {
 	// Write data rows
 	for _, message := range messages {
 		var row []string
-
 		switch g.protocol {
 		case "modbus":
 			count := ConvertToInt(message.Count)
@@ -196,11 +195,9 @@ func (g *Generator) CraftMaster(messages []Message, index int) error {
 					countStr = c
 				}
 			}
-
-			valuesStr := ""
-			if len(message.Values) > 0 {
-				valuesStr = fmt.Sprintf("%v", message.Values)
-			}
+			
+			// CORRECCIÓN: Convertir slice a string separada por comas
+			valuesStr := formatSliceToCSV(message.Values)
 
 			row = []string{
 				message.Timestamp,
@@ -253,6 +250,32 @@ func (g *Generator) CraftMaster(messages []Message, index int) error {
 
 	return nil
 }
+
+// formatSliceToCSV convierte un slice de interfaces a string CSV
+// [] -> ""
+// [1, 2, 3] -> "1,2,3"
+func formatSliceToCSV(values []interface{}) string {
+	if len(values) == 0 {
+		return ""
+	}
+
+	strValues := make([]string, len(values))
+	for i, v := range values {
+		switch val := v.(type) {
+		case int:
+			strValues[i] = strconv.Itoa(val)
+		case float64:
+			strValues[i] = strconv.FormatFloat(val, 'f', -1, 64)
+		case string:
+			strValues[i] = val
+		default:
+			strValues[i] = fmt.Sprintf("%v", val)
+		}
+	}
+
+	return strings.Join(strValues, ",")
+}
+
 
 // CraftSlave creates configuration files for slave nodes
 func (g *Generator) CraftSlave(slave Node, index int) error {

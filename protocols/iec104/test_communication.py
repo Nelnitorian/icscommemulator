@@ -60,10 +60,11 @@ class TestIEC104Communication:
             },
         }
 
-        config_file = tmp_path / "test_server_config.yaml"
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        config_file = config_dir / "slave.yaml"
         with open(config_file, "w") as f:
             yaml.dump(config, f)
-
         return str(config_file)
 
     @pytest.fixture
