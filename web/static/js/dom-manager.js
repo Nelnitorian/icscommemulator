@@ -6,18 +6,18 @@ class DOMManager {
     constructor() {
         this.cacheElements();
     }
-    
+
     cacheElements() {
         // Popups
         this.nodeConfigPopup = document.getElementById('configPopup');
         this.edgeConfigPopup = document.getElementById('edgeConfigPopup');
-        this.registersPanelElement = document.getElementById('registers_panel');
-        this.identityPanelElement = document.getElementById('identity_panel');
-        
+        this.registersPanelElement = document.getElementById('registersPanel');
+        this.identityPanelElement = document.getElementById('identityPanel');
+
         // Forms
         this.nodeConfigForm = document.getElementById('configForm');
         this.edgeConfigForm = document.getElementById('edgeConfigForm');
-        
+
         // Node fields
         this.fields = {
             name: document.getElementById('name'),
@@ -29,7 +29,7 @@ class DOMManager {
             port: document.getElementById('port'),
             slaveId: document.getElementById('slave_id')
         };
-        
+
         // Register fields
         this.registers = {
             discreteInputsType: document.getElementById('discrete_inputs_type'),
@@ -41,7 +41,7 @@ class DOMManager {
             holdingRegistersType: document.getElementById('holding_registers_type'),
             holdingRegisters: document.getElementById('holding_registers')
         };
-        
+
         // Identity fields
         this.identity = {
             vendorName: document.getElementById('vendor_name'),
@@ -52,11 +52,11 @@ class DOMManager {
             modelName: document.getElementById('model_name'),
             userApplicationName: document.getElementById('user_application_name')
         };
-        
+
         // Edge fields
         this.edgeConfigDirection = document.getElementById('edgeConfigDirection');
-        
-        // Run elements
+
+        // Run elements - CORREGIDO: IDs con guiones bajos
         this.run = {
             settings: document.getElementById('run_settings'),
             settingsContent: document.getElementById('run_settings_content'),
@@ -69,28 +69,28 @@ class DOMManager {
             percentageProgress: document.getElementById('percentage_progress'),
             pcapSize: document.getElementById('pcap_size')
         };
-        
+
         this.errorMessage = document.getElementById('error-message');
     }
-    
+
     hideAllPopups() {
         this.nodeConfigPopup.style.display = 'none';
         this.edgeConfigPopup.style.display = 'none';
         this.registersPanelElement.style.display = 'none';
         this.identityPanelElement.style.display = 'none';
     }
-    
+
     isAnyPopupVisible() {
         return this.nodeConfigPopup.style.display === 'block' ||
                this.edgeConfigPopup.style.display === 'block' ||
                this.run.overlay.style.display === 'block' ||
                this.run.settings.style.display === 'block';
     }
-    
+
     showNodeConfig() {
         this.nodeConfigPopup.style.display = 'block';
     }
-    
+
     showEdgeConfig() {
         this.edgeConfigPopup.style.display = 'block';
     }

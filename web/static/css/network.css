@@ -475,3 +475,126 @@ button:active {
     color: var(--primary-blue);
     font-size: 0.95rem;
 }
+
+
+#run_overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 9999;
+    display: none;
+    justify-content: center;
+    align-items: center;
+}
+
+#run_overlay_content {
+    background: white;
+    border-radius: 8px;
+    padding: 2rem;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    min-width: 350px;
+    max-width: 500px;
+    text-align: center;
+}
+
+#run_overlay_content h2 {
+    margin: 0 0 1.5rem 0;
+    color: #3A86FF;
+    font-size: 1.5rem;
+    border-bottom: 2px solid #3A86FF;
+    padding-bottom: 0.75rem;
+}
+
+#run_overlay_content .form-row {
+    margin-bottom: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid #ced4da;
+}
+
+#run_overlay_content .form-row:last-of-type {
+    border-bottom: none;
+}
+
+#run_overlay_content .form-row p:first-child {
+    font-weight: 600;
+    color: #1e293b;
+    margin: 0;
+    font-size: 0.95rem;
+}
+
+#run_overlay_content .form-row p:last-child {
+    font-weight: 700;
+    color: #3A86FF;
+    margin: 0;
+    font-size: 1.1rem;
+}
+
+#stop_button {
+    margin-top: 1.5rem;
+    background: #ef4444;
+    color: white;
+    padding: 0.75rem 2rem;
+    font-size: 1rem;
+    font-weight: 600;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+#stop_button:hover {
+    background: #dc2626;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+#zoom-controls {
+    position: fixed;
+    bottom: 1rem;
+    right: 1rem;
+    background: var(--toolbar-bg);
+    padding: 0.5rem;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    backdrop-filter: blur(10px);
+}
+
+#zoom-in,
+#zoom-out {
+    background: white;
+    color: var(--primary-blue);
+    border: 2px solid var(--primary-blue);
+    padding: 0.5rem 0.75rem;
+    font-size: 1.125rem;
+    font-weight: 700;
+    min-width: 40px;
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+#zoom-in:hover,
+#zoom-out:hover {
+    background: var(--primary-blue);
+    color: white;
+    transform: scale(1.05);
+}
+
+#zoom-in:active,
+#zoom-out:active {
+    transform: scale(0.95);
+}

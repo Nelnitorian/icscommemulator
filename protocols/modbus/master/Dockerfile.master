@@ -29,8 +29,5 @@ COPY --from=build /app/master ./master
 # Make sure the binary is executable
 RUN chmod +x ./master
 
-# Expose port (although master typically connects outbound)
-EXPOSE 502
-
 # Run the master application
 ENTRYPOINT ["./master"]
