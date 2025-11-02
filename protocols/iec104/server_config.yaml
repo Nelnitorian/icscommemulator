@@ -1,0 +1,49 @@
+ip: "0.0.0.0"
+port: 2404
+tick_rate_ms: 100
+select_timeout_ms: 10000
+max_connections: 5
+
+protocol_parameters:
+  t1: 15  # message_timeout (seconds)
+  t2: 10  # confirm_interval (seconds)
+  t3: 20  # keep_alive_interval (seconds)
+  k: 12   # send_window_size
+  w: 8    # receive_window_size
+
+stations:
+  - common_address: 1
+    points:
+      single_points:
+        - ioa: 1001
+          value: true
+          report_ms: 0
+        - ioa: 1002
+          value: false
+          report_ms: 0
+      
+      measured_scaled:
+        - ioa: 5001
+          value: 100
+          report_ms: 5000
+        - ioa: 5002
+          value: 200
+          report_ms: 5000
+      
+      measured_short:
+        - ioa: 6001
+          value: 12.34
+          report_ms: 5000
+        - ioa: 6002
+          value: 56.78
+          report_ms: 5000
+      
+      single_commands:
+        - ioa: 8001
+          related_ioa: 1001
+      
+      setpoint_short:
+        - ioa: 11001
+          related_ioa: 6001
+
+authorized_masters: [0, 1, 2, 3]

@@ -1,0 +1,6 @@
+timestamp,ip,port,typeid,common_address,recurrent,interval,ioa,cot,value
+0,127.0.0.1,2404,103,1,false,0,0,0,
+1,127.0.0.1,2404,100,1,false,0,0,6,
+10,127.0.0.1,2404,58,1,false,0,8001,6,1
+20,127.0.0.1,2404,63,1,false,0,11001,6,99.99
+30,127.0.0.1,2404,100,1,true,60,0,6,
