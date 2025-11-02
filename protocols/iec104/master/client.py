@@ -29,6 +29,7 @@ class CommandType(IntEnum):
 
     INTERROGATION = 100  # C_IC_NA_1
     COUNTER_INTERROGATION = 101  # C_CI_NA_1
+    READ = 102  # C_RD_NA_1
     CLOCK_SYNC = 103  # C_CS_NA_1
     TEST = 104  # C_TS_NA_1
     SINGLE_COMMAND = 45  # C_SC_NA_1
@@ -87,6 +88,77 @@ class IEC104Client:
             f"IEC104 Client initialized (tick_rate={tick_rate_ms}ms, "
             f"command_timeout={command_timeout_ms}ms)"
         )
+
+    def read_command(
+        self,
+        ip: str,
+        port: int,
+        common_address: int,
+        io_address: int,
+        wait: bool = True,
+    ) -> bool:
+        """
+        Envía comando de lectura (C_RD_NA_1) para solicitar el valor actual de un punto
+
+        Args:
+            ip: IP del servidor RTU
+            port: Puerto del servidor
+            common_address: CA de la estación
+            io_address: Dirección del objeto de información a leer
+            wait: Esperar respuesta
+
+        Returns:
+            True si el comando fue enviado exitosamente
+        """
+        conn_key = (ip, port)
+        if conn_key not in self.connections:
+            logger.error(f"Connection {ip}:{port} not found")
+            return False
+
+        connection = self.connections[conn_key]
+
+        # Obtener o crear la estación
+        station = connection.get_station(common_address=common_address)
+        if not station:
+            logger.warning(f"Station CA={common_address} not found, creating it")
+            station = connection.add_station(common_address=common_address)
+            if not station:
+                logger.error(f"Failed to create station CA={common_address}")
+                return False
+
+        # Obtener o crear el punto
+        point = station.get_point(io_address=io_address)
+        if not point:
+            logger.warning(
+                f"Point IOA={io_address} not found in station CA={common_address}, "
+                f"creating temporary point as M_SP_NA_1"
+            )
+            # Crear un punto temporal - el tipo será actualizado cuando llegue la respuesta
+            point = station.add_point(
+                io_address=io_address, type=c104.Type.M_SP_NA_1  # Tipo por defecto
+            )
+            if not point:
+                logger.error(f"Failed to create point IOA={io_address}")
+                return False
+
+        logger.info(
+            f"Sending read command (C_RD_NA_1) to {ip}:{port} CA={common_address} IOA={io_address}"
+        )
+
+        try:
+            # El método read() está en el objeto Point, no en Connection
+            success = point.read()
+
+            if success:
+                logger.info(f"Read command sent successfully for IOA={io_address}")
+            else:
+                logger.error(f"Failed to send read command for IOA={io_address}")
+
+            return success
+
+        except Exception as e:
+            logger.error(f"Exception sending read command: {e}")
+            return False
 
     def add_connection(
         self, ip: str, port: int = 2404, init_mode: c104.Init = c104.Init.INTERROGATION
@@ -601,6 +673,14 @@ class IEC104Client:
                             schedule.ioa,
                             schedule.value,
                             c104.Type.C_SE_TC_1,
+                        )
+
+                    elif schedule.type_id == CommandType.READ:
+                        self.read_command(
+                            schedule.ip,
+                            schedule.port,
+                            schedule.common_address,
+                            schedule.ioa,
                         )
 
                     schedule.executed = True

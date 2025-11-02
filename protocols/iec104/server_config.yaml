@@ -14,6 +14,7 @@ protocol_parameters:
 stations:
   - common_address: 1
     points:
+      # M_SP_NA_1 - Single-point information
       single_points:
         - ioa: 1001
           value: true
@@ -21,7 +22,14 @@ stations:
         - ioa: 1002
           value: false
           report_ms: 0
+        - ioa: 1003
+          value: true
+          report_ms: 10000
+        - ioa: 1004
+          value: false
+          report_ms: 0
       
+      # M_ME_NB_1 - Measured scaled value
       measured_scaled:
         - ioa: 5001
           value: 100
@@ -29,7 +37,11 @@ stations:
         - ioa: 5002
           value: 200
           report_ms: 5000
+        - ioa: 5003
+          value: 350
+          report_ms: 0
       
+      # M_ME_NC_1 - Measured short (float)
       measured_short:
         - ioa: 6001
           value: 12.34
@@ -37,7 +49,14 @@ stations:
         - ioa: 6002
           value: 56.78
           report_ms: 5000
+        - ioa: 6003
+          value: 99.99
+          report_ms: 0
+        - ioa: 6004
+          value: -15.5
+          report_ms: 0
       
+      # Comandos
       single_commands:
         - ioa: 8001
           related_ioa: 1001

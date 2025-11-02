@@ -380,6 +380,104 @@ class TestIEC104Communication:
             f"âœ“ Timestamp precision: {timestamps_valid} valid, avg={avg_precision:.1f}ms, min={min_precision:.1f}ms, max={max_precision:.1f}ms"
         )
 
+    def test_13_read_command(self, server, client, connection_setup):
+        """Test: comando de lectura C_RD_NA_1"""
+        ip, port, ca = connection_setup
+
+        # Limpiar datos recibidos
+        with client.data_lock:
+            client.received_data.clear()
+
+        # Test 1: Leer punto single-point (M_SP_NA_1)
+        ioa_sp = 1001
+        logger.info(f"Testing read command for single-point IOA={ioa_sp}")
+        success = client.read_command(ip, port, ca, ioa_sp, wait=True)
+        assert success, f"Read command failed for IOA={ioa_sp}"
+        time.sleep(2)
+
+        # Verificar que se recibió respuesta
+        with client.data_lock:
+            # Debug: mostrar todos los datos recibidos
+            logger.info(f"Total data received: {len(client.received_data)}")
+            for entry in client.received_data:
+                logger.info(f"Received entry keys: {entry.keys()}")
+                logger.info(f"Received entry: {entry}")
+
+            # Usar la clave correcta: io_address en lugar de ioa
+            sp_responses = [
+                d for d in client.received_data if d.get("io_address") == ioa_sp
+            ]
+            assert len(sp_responses) > 0, (
+                f"No response received for single-point IOA={ioa_sp}. "
+                f"Received data: {client.received_data}"
+            )
+
+            # Verificar que la causa de transmisión es REQUEST (5)
+            sp_cot = sp_responses[0]["cot"]
+            logger.info(
+                f"Single-point read: IOA={ioa_sp}, value={sp_responses[0]['value']}, COT={sp_cot}"
+            )
+            print(
+                f"  ✓ Single-point (M_SP_NA_1) read: IOA={ioa_sp}, value={sp_responses[0]['value']}"
+            )
+
+        # Limpiar para siguiente test
+        with client.data_lock:
+            client.received_data.clear()
+        time.sleep(1)
+
+        # Test 2: Leer punto measured short (M_ME_NC_1)
+        ioa_mf = 6001
+        logger.info(f"Testing read command for measured short IOA={ioa_mf}")
+        success = client.read_command(ip, port, ca, ioa_mf, wait=True)
+        assert success, f"Read command failed for IOA={ioa_mf}"
+        time.sleep(2)
+
+        # Verificar respuesta
+        with client.data_lock:
+            mf_responses = [
+                d for d in client.received_data if d.get("io_address") == ioa_mf
+            ]
+            assert len(mf_responses) > 0, (
+                f"No response received for measured short IOA={ioa_mf}. "
+                f"Received data: {client.received_data}"
+            )
+
+            mf_cot = mf_responses[0]["cot"]
+            logger.info(
+                f"Measured short read: IOA={ioa_mf}, value={mf_responses[0]['value']}, COT={mf_cot}"
+            )
+            print(
+                f"  ✓ Measured short (M_ME_NC_1) read: IOA={ioa_mf}, value={mf_responses[0]['value']}"
+            )
+
+        # Limpiar para siguiente test
+        with client.data_lock:
+            client.received_data.clear()
+        time.sleep(1)
+
+        # Test 3: Leer punto escalado (M_ME_NB_1)
+        ioa_scaled = 5001
+        logger.info(f"Testing read command for measured scaled IOA={ioa_scaled}")
+        success = client.read_command(ip, port, ca, ioa_scaled, wait=True)
+        assert success, f"Read command failed for IOA={ioa_scaled}"
+        time.sleep(2)
+
+        with client.data_lock:
+            scaled_responses = [
+                d for d in client.received_data if d.get("io_address") == ioa_scaled
+            ]
+            logger.info(f"Scaled responses: {scaled_responses}")
+            if len(scaled_responses) > 0:
+                logger.info(
+                    f"Measured scaled read: IOA={ioa_scaled}, value={scaled_responses[0]['value']}"
+                )
+                print(
+                    f"  ✓ Measured scaled (M_ME_NB_1) read: IOA={ioa_scaled}, value={scaled_responses[0]['value']}"
+                )
+
+        print(f"✓ Read command (C_RD_NA_1) test passed: tested M_SP_NA_1 and M_ME_NC_1")
+
 
 def test_integration_full_cycle():
     """Test de integraciÃ³n: ciclo completo SCADAâ†”RTU"""
