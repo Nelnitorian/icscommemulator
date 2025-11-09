@@ -478,6 +478,64 @@ class TestIEC104Communication:
 
         print(f"✓ Read command (C_RD_NA_1) test passed: tested M_SP_NA_1 and M_ME_NC_1")
 
+    def test_14_m_me_tf_1_monitoring(self, server, client, connection_setup):
+        """Test: M_ME_TF_1 measured short with timestamp"""
+        ip, port, ca = connection_setup
+
+        # Agregar punto M_ME_TF_1
+        client.add_point(ip, port, ca, 6101, c104.Type.M_ME_TF_1)
+
+        with client.data_lock:
+            client.received_data.clear()
+
+        time.sleep(6)  # Esperar reporte automático
+
+        with client.data_lock:
+            responses = [d for d in client.received_data if d.get("io_address") == 6101]
+            assert len(responses) > 0, "No M_ME_TF_1 data received"
+            # Verificar que tiene timestamp
+            assert responses[0]["timestamp"], "No timestamp in M_ME_TF_1"
+
+        print(f"✓ M_ME_TF_1 test passed: {responses[0]['value']}")
+
+    def test_15_m_sp_tb_1_monitoring(self, server, client, connection_setup):
+        """Test: M_SP_TB_1 single point with timestamp"""
+        ip, port, ca = connection_setup
+
+        client.add_point(ip, port, ca, 1101, c104.Type.M_SP_TB_1)
+
+        with client.data_lock:
+            client.received_data.clear()
+
+        time.sleep(9)
+
+        with client.data_lock:
+            responses = [d for d in client.received_data if d.get("io_address") == 1101]
+            assert len(responses) > 0, "No M_SP_TB_1 data received"
+            assert responses[0]["timestamp"], "No timestamp in M_SP_TB_1"
+
+        print(f"✓ M_SP_TB_1 test passed: {responses[0]['value']}")
+
+    def test_16_c_sc_ta_1_command(self, server, client, connection_setup):
+        """Test: C_SC_TA_1 single command with timestamp"""
+        ip, port, ca = connection_setup
+
+        success = client.send_command(ip, port, ca, 8101, True, c104.Type.C_SC_TA_1)
+        assert success, "C_SC_TA_1 command failed"
+        time.sleep(2)
+
+        print(f"✓ C_SC_TA_1 command test passed")
+
+    def test_17_c_se_tc_1_command(self, server, client, connection_setup):
+        """Test: C_SE_TC_1 setpoint short with timestamp"""
+        ip, port, ca = connection_setup
+
+        success = client.send_command(ip, port, ca, 11101, 88.88, c104.Type.C_SE_TC_1)
+        assert success, "C_SE_TC_1 command failed"
+        time.sleep(2)
+
+        print(f"✓ C_SE_TC_1 command test passed")
+
 
 def test_integration_full_cycle():
     """Test de integraciÃ³n: ciclo completo SCADAâ†”RTU"""

@@ -249,6 +249,69 @@ class IEC104Server:
                     point.on_before_read(callable=self._on_before_read)
                     self.points[ca][mf["ioa"]] = point
                     logger.info(f"  Point IOA={mf['ioa']} Type=M_ME_NC_1")
+            # M_ME_TF_1 - Measured short with time tag CP56Time2a
+            for mf_t in points_cfg.get("measured_short_time", []):
+                point = station.add_point(
+                    io_address=mf_t["ioa"],
+                    type=c104.Type.M_ME_TF_1,
+                    report_ms=mf_t.get("report_ms", 0),
+                )
+                if point:
+                    point.value = float(mf_t.get("value", 0.0))
+                    point.quality = c104.Quality()
+                    point.on_before_auto_transmit(
+                        callable=self._on_before_auto_transmit
+                    )
+                    point.on_before_read(callable=self._on_before_read)
+                    self.points[ca][mf_t["ioa"]] = point
+                    logger.info(f"  Point IOA={mf_t['ioa']} Type=M_ME_TF_1")
+
+            # M_SP_TB_1 - Single point with time tag CP56Time2a
+            for sp_t in points_cfg.get("single_points_time", []):
+                point = station.add_point(
+                    io_address=sp_t["ioa"],
+                    type=c104.Type.M_SP_TB_1,
+                    report_ms=sp_t.get("report_ms", 0),
+                )
+                if point:
+                    point.value = sp_t.get("value", False)
+                    point.quality = c104.Quality()
+                    point.on_before_auto_transmit(
+                        callable=self._on_before_auto_transmit
+                    )
+                    point.on_before_read(callable=self._on_before_read)
+                    self.points[ca][sp_t["ioa"]] = point
+                    logger.info(f"  Point IOA={sp_t['ioa']} Type=M_SP_TB_1")
+
+            # C_SC_TA_1 - Single command with time tag
+            for sc_t in points_cfg.get("single_commands_time", []):
+                point = station.add_point(
+                    io_address=sc_t["ioa"],
+                    type=c104.Type.C_SC_TA_1,
+                    related_io_address=sc_t.get("related_ioa"),
+                    related_io_autoreturn=True,
+                    command_mode=c104.CommandMode.DIRECT,
+                )
+                if point:
+                    point.on_receive(callable=self._on_command_receive)
+                    self.points[ca][sc_t["ioa"]] = point
+                    logger.info(
+                        f"  Point IOA={sc_t['ioa']} Type=C_SC_TA_1 (DIRECT mode)"
+                    )
+
+            # C_SE_TC_1 - Setpoint short with time tag
+            for sf_t in points_cfg.get("setpoint_short_time", []):
+                point = station.add_point(
+                    io_address=sf_t["ioa"],
+                    type=c104.Type.C_SE_TC_1,
+                    related_io_address=sf_t.get("related_ioa"),
+                    related_io_autoreturn=True,
+                    command_mode=c104.CommandMode.DIRECT,
+                )
+                if point:
+                    point.on_receive(callable=self._on_command_receive)
+                    self.points[ca][sf_t["ioa"]] = point
+                    logger.info(f"  Point IOA={sf_t['ioa']} Type=C_SE_TC_1")
 
             for bc in points_cfg.get("binary_counters", []):
                 point = station.add_point(

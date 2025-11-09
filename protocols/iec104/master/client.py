@@ -522,6 +522,10 @@ class IEC104Client:
                 point.value = c104.Int16(int(value))
             elif command_type in [c104.Type.C_SE_NC_1]:
                 point.value = float(value)
+            elif command_type in [c104.Type.C_SC_TA_1]:
+                point.value = bool(value)
+            elif command_type in [c104.Type.C_SE_TC_1]:
+                point.value = float(value)
             else:
                 point.value = value
         except Exception as e:

@@ -64,5 +64,29 @@ stations:
       setpoint_short:
         - ioa: 11001
           related_ioa: 6001
+          
+      measured_short_time:
+        - ioa: 6101
+          value: 25.5
+          report_ms: 5000
+        - ioa: 6102
+          value: 50.0
+          report_ms: 5000
+      
+      single_points_time:
+        - ioa: 1101
+          value: true
+          report_ms: 8000
+        - ioa: 1102
+          value: false
+          report_ms: 8000
+      
+      single_commands_time:
+        - ioa: 8101
+          related_ioa: 1101
+      
+      setpoint_short_time:
+        - ioa: 11101
+          related_ioa: 6101
 
 authorized_masters: [0, 1, 2, 3]
