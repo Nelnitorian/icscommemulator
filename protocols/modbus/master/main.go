@@ -1,211 +1,149 @@
 package main
 
 import (
-	"encoding/csv"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"os/signal"
 	"sort"
 	"strconv"
-	"strings"
 	"syscall"
 	"time"
 
 	"github.com/goburrow/modbus"
 	"github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v3"
 )
 
 type Message struct {
-	Timestamp    float64
+	Timestamp    int
 	IP           string
 	Port         int
 	FunctionCode int
 	StartAddress int
 	SlaveID      int
 	Recurrent    bool
-	Interval     float64 // In milliseconds
+	Interval     int
 	Count        int
 	Values       []int
-	OriginalRow  map[string]string
+}
+
+type MasterConfig struct {
+	Protocol string          `yaml:"protocol"`
+	Messages []MessageConfig `yaml:"messages"`
+}
+
+type MessageConfig struct {
+	Timestamp    int           `yaml:"timestamp"`
+	Recurrent    bool          `yaml:"recurrent"`
+	Interval     int           `yaml:"interval"`
+	IP           string        `yaml:"ip"`
+	Port         int           `yaml:"port"`
+	SlaveID      int           `yaml:"slave_id"`
+	FunctionCode int           `yaml:"function_code"`
+	StartAddress int           `yaml:"start_address"`
+	Count        int           `yaml:"count"`
+	Values       []interface{} `yaml:"values"`
 }
 
 type ModbusMaster struct {
-	csvFile   string
-	messages  []Message
-	handlers  map[string]*modbus.TCPClientHandler
-	responses []interface{}
-	logger    *logrus.Logger
+	configFile   string
+	messages     []Message
+	handlers     map[string]*modbus.TCPClientHandler
+	responses    []interface{}
+	logger       *logrus.Logger
 	hasRecurrent bool
 }
 
-func NewModbusMaster(csvFile string) *ModbusMaster {
+func NewModbusMaster(configFile string) *ModbusMaster {
 	logger := logrus.New()
 	logger.SetLevel(logrus.InfoLevel)
 	return &ModbusMaster{
-		csvFile:   csvFile,
-		messages:  make([]Message, 0),
-		handlers:  make(map[string]*modbus.TCPClientHandler),
-		responses: make([]interface{}, 0),
-		logger:    logger,
+		configFile:   configFile,
+		messages:     make([]Message, 0),
+		handlers:     make(map[string]*modbus.TCPClientHandler),
+		responses:    make([]interface{}, 0),
+		logger:       logger,
 		hasRecurrent: false,
 	}
 }
 
 func (m *ModbusMaster) setup() error {
-	file, err := os.Open(m.csvFile)
+	data, err := os.ReadFile(m.configFile)
 	if err != nil {
-		return fmt.Errorf("failed to open CSV file: %w", err)
-	}
-	defer file.Close()
-
-	reader := csv.NewReader(file)
-
-	// Read header
-	header, err := reader.Read()
-	if err != nil {
-		return fmt.Errorf("failed to read CSV header: %w", err)
+		return fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	// Read all records
-	for {
-		record, err := reader.Read()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return fmt.Errorf("failed to read CSV record: %w", err)
-		}
+	var cfg MasterConfig
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return fmt.Errorf("failed to parse config file: %w", err)
+	}
 
-		// Create map from header and record
-		row := make(map[string]string)
-		for i, value := range record {
-			if i < len(header) {
-				row[header[i]] = value
-			}
-		}
-
-		message, err := m.parseMessage(row)
+	for _, raw := range cfg.Messages {
+		msg, err := m.parseMessage(raw)
 		if err != nil {
-			m.logger.WithError(err).WithField("row", row).Warn("Failed to parse message, skipping")
+			m.logger.WithError(err).WithField("message", raw).Warn("Failed to parse message, skipping")
 			continue
 		}
+		m.messages = append(m.messages, msg)
 
-		m.messages = append(m.messages, message)
-		
-		// Track if we have any recurrent messages
-		if message.Recurrent {
+		if msg.Recurrent {
 			m.hasRecurrent = true
 		}
 
-		// Create handler if not exists
-		clientKey := fmt.Sprintf("%s:%d", message.IP, message.Port)
+		clientKey := fmt.Sprintf("%s:%d", msg.IP, msg.Port)
 		if _, exists := m.handlers[clientKey]; !exists {
-			handler := modbus.NewTCPClientHandler(fmt.Sprintf("%s:%d", message.IP, message.Port))
+			handler := modbus.NewTCPClientHandler(fmt.Sprintf("%s:%d", msg.IP, msg.Port))
 			handler.Timeout = 10 * time.Second
-			handler.SlaveId = byte(message.SlaveID)
+			handler.SlaveId = byte(msg.SlaveID)
 			m.handlers[clientKey] = handler
 		}
 	}
 
-	// Sort messages by timestamp
 	sort.Slice(m.messages, func(i, j int) bool {
 		return m.messages[i].Timestamp < m.messages[j].Timestamp
 	})
 
-	m.logger.Infof("Loaded %d messages from %s", len(m.messages), m.csvFile)
+	m.logger.Infof("Loaded %d messages from %s", len(m.messages), m.configFile)
 	if m.hasRecurrent {
 		m.logger.Info("Recurrent messages detected - master will run indefinitely (Ctrl+C to stop)")
 	}
 	return nil
 }
 
-// cleanValueString removes brackets, braces and extra whitespace from value strings
-func cleanValueString(s string) string {
-	s = strings.TrimSpace(s)
-	// Remove surrounding brackets or braces
-	s = strings.Trim(s, "[]{}()")
-	return strings.TrimSpace(s)
-}
-
-func (m *ModbusMaster) parseMessage(row map[string]string) (Message, error) {
-	msg := Message{OriginalRow: row}
-	var err error
-
-	// Parse timestamp
-	if msg.Timestamp, err = strconv.ParseFloat(row["timestamp"], 64); err != nil {
-		return msg, fmt.Errorf("invalid timestamp: %w", err)
+func (m *ModbusMaster) parseMessage(raw MessageConfig) (Message, error) {
+	msg := Message{
+		Timestamp:    raw.Timestamp,
+		IP:           raw.IP,
+		Port:         raw.Port,
+		FunctionCode: raw.FunctionCode,
+		StartAddress: raw.StartAddress,
+		SlaveID:      raw.SlaveID,
+		Recurrent:    raw.Recurrent,
+		Interval:     raw.Interval,
+		Count:        raw.Count,
+		Values:       []int{},
 	}
 
-	// Parse basic fields
-	msg.IP = row["ip"]
-
-	if msg.Port, err = strconv.Atoi(row["port"]); err != nil {
-		return msg, fmt.Errorf("invalid port: %w", err)
-	}
-
-	if msg.FunctionCode, err = strconv.Atoi(row["function_code"]); err != nil {
-		return msg, fmt.Errorf("invalid function_code: %w", err)
-	}
-
-	if msg.SlaveID, err = strconv.Atoi(row["slave_id"]); err != nil {
-		return msg, fmt.Errorf("invalid slave_id: %w", err)
-	}
-
-	// Parse recurrent
-	msg.Recurrent = strings.ToLower(row["recurrent"]) == "true"
-
-	// Parse interval if recurrent (in milliseconds)
-	if msg.Recurrent && row["interval"] != "" {
-		if msg.Interval, err = strconv.ParseFloat(row["interval"], 64); err != nil {
-			return msg, fmt.Errorf("invalid interval: %w", err)
-		}
-	}
-
-	// Parse start_address for read/write functions
-	if msg.FunctionCode >= 1 && msg.FunctionCode <= 6 || msg.FunctionCode == 15 || msg.FunctionCode == 16 {
-		if row["start_address"] != "" {
-			if msg.StartAddress, err = strconv.Atoi(row["start_address"]); err != nil {
-				return msg, fmt.Errorf("invalid start_address: %w", err)
+	for i, value := range raw.Values {
+		switch v := value.(type) {
+		case int:
+			msg.Values = append(msg.Values, v)
+		case int64:
+			msg.Values = append(msg.Values, int(v))
+		case float64:
+			msg.Values = append(msg.Values, int(v))
+		case string:
+			if v == "" {
+				continue
 			}
-		}
-	}
-
-	// Parse count for read functions
-	if msg.FunctionCode >= 1 && msg.FunctionCode <= 4 && row["count"] != "" {
-		if msg.Count, err = strconv.Atoi(row["count"]); err != nil {
-			return msg, fmt.Errorf("invalid count: %w", err)
-		}
-	}
-
-	// Parse values for write functions
-	if (msg.FunctionCode == 5 || msg.FunctionCode == 6 || msg.FunctionCode == 15 || msg.FunctionCode == 16) && row["values"] != "" {
-		// Clean the values string (remove brackets, trim spaces)
-		cleanedValues := cleanValueString(row["values"])
-		
-		if cleanedValues == "" {
-			return msg, fmt.Errorf("empty values after cleaning")
-		}
-
-		valueStrs := strings.Split(cleanedValues, ",")
-		msg.Values = make([]int, 0, len(valueStrs))
-		
-		for i, valueStr := range valueStrs {
-			valueStr = strings.TrimSpace(valueStr)
-			if valueStr == "" {
-				continue // Skip empty values
-			}
-			
-			val, err := strconv.Atoi(valueStr)
+			parsed, err := strconv.Atoi(v)
 			if err != nil {
-				return msg, fmt.Errorf("invalid value '%s' at index %d: %w", valueStr, i, err)
+				return msg, fmt.Errorf("invalid value '%s' at index %d: %w", v, i, err)
 			}
-			msg.Values = append(msg.Values, val)
-		}
-
-		if len(msg.Values) == 0 {
-			return msg, fmt.Errorf("no valid values parsed from '%s'", row["values"])
+			msg.Values = append(msg.Values, parsed)
+		default:
+			return msg, fmt.Errorf("unsupported value type at index %d", i)
 		}
 	}
 
@@ -216,18 +154,22 @@ func (m *ModbusMaster) sendMessage(msg Message) interface{} {
 	clientKey := fmt.Sprintf("%s:%d", msg.IP, msg.Port)
 	handler := m.handlers[clientKey]
 
-	// Set correct slave ID for this message
 	handler.SlaveId = byte(msg.SlaveID)
 
-	// Connect
-	err := handler.Connect()
+	var err error
+	for attempt := 0; attempt < 5; attempt++ {
+		err = handler.Connect()
+		if err == nil {
+			break
+		}
+		time.Sleep(1 * time.Second)
+	}
 	if err != nil {
 		m.logger.WithError(err).Error("Failed to connect")
 		return err
 	}
 	defer handler.Close()
 
-	// Create client
 	client := modbus.NewClient(handler)
 
 	m.logger.Infof("Sending msg to %s:%d - FC:%d - Addr:%d - Slave:%d - Values:%v - Count:%d",
@@ -236,19 +178,19 @@ func (m *ModbusMaster) sendMessage(msg Message) interface{} {
 	var result []byte
 
 	switch msg.FunctionCode {
-	case 1: // Read Coils
+	case 1:
 		result, err = client.ReadCoils(uint16(msg.StartAddress), uint16(msg.Count))
 
-	case 2: // Read Discrete Inputs
+	case 2:
 		result, err = client.ReadDiscreteInputs(uint16(msg.StartAddress), uint16(msg.Count))
 
-	case 3: // Read Holding Registers
+	case 3:
 		result, err = client.ReadHoldingRegisters(uint16(msg.StartAddress), uint16(msg.Count))
 
-	case 4: // Read Input Registers
+	case 4:
 		result, err = client.ReadInputRegisters(uint16(msg.StartAddress), uint16(msg.Count))
 
-	case 5: // Write Single Coil
+	case 5:
 		if len(msg.Values) > 0 {
 			value := uint16(0)
 			if msg.Values[0] != 0 {
@@ -259,15 +201,14 @@ func (m *ModbusMaster) sendMessage(msg Message) interface{} {
 			err = fmt.Errorf("no values provided for write single coil")
 		}
 
-	case 6: // Write Single Register
+	case 6:
 		if len(msg.Values) > 0 {
 			result, err = client.WriteSingleRegister(uint16(msg.StartAddress), uint16(msg.Values[0]))
 		} else {
 			err = fmt.Errorf("no values provided for write single register")
 		}
 
-	case 15: // Write Multiple Coils
-		// Convert values to byte array
+	case 15:
 		numBytes := (len(msg.Values) + 7) / 8
 		values := make([]byte, numBytes)
 		for i, v := range msg.Values {
@@ -279,7 +220,7 @@ func (m *ModbusMaster) sendMessage(msg Message) interface{} {
 		}
 		result, err = client.WriteMultipleCoils(uint16(msg.StartAddress), uint16(len(msg.Values)), values)
 
-	case 16: // Write Multiple Registers
+	case 16:
 		values := make([]byte, len(msg.Values)*2)
 		for i, v := range msg.Values {
 			values[i*2] = byte(v >> 8)
@@ -301,56 +242,43 @@ func (m *ModbusMaster) sendMessage(msg Message) interface{} {
 }
 
 func (m *ModbusMaster) loop() {
-	// Setup signal handling for graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// Start time tracking
-	currentTime := 0.0
+	currentTime := 0
 
 	for {
-		// Check for signals
 		select {
 		case <-sigChan:
 			m.logger.Info("Received shutdown signal, stopping...")
 			return
 		default:
-			// Continue processing
 		}
 
-		// Check if we have messages to process
 		if len(m.messages) == 0 {
 			if !m.hasRecurrent {
-				// No more messages and no recurrent ones - we're done
 				m.logger.Info("All messages processed")
 				return
 			}
-			// If we have recurrent messages but queue is empty, wait a bit
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
 
-		// Get next message
 		msg := m.messages[0]
 		m.messages = m.messages[1:]
 
-		// Wait for the appropriate time
 		delay := msg.Timestamp - currentTime
 		if delay > 0 {
-			time.Sleep(time.Duration(delay * float64(time.Second)))
+			time.Sleep(time.Duration(delay) * time.Second)
 		}
 		currentTime = msg.Timestamp
 
-		// Send the message
 		response := m.sendMessage(msg)
 		m.responses = append(m.responses, response)
 
-		// If recurrent, reschedule
 		if msg.Recurrent && msg.Interval > 0 {
-			// Convert interval from milliseconds to seconds and add to timestamp
-			msg.Timestamp += msg.Interval / 1000.0
+			msg.Timestamp += msg.Interval
 
-			// Insert back into messages maintaining order
 			inserted := false
 			for i, existingMsg := range m.messages {
 				if msg.Timestamp < existingMsg.Timestamp {
@@ -366,12 +294,10 @@ func (m *ModbusMaster) loop() {
 	}
 }
 
-
 func main() {
 	fmt.Println("Starting ModbusMaster...")
 
-	// Allow config file path to be overridden via environment variable
-	configFile := "/app/config/master.csv"
+	configFile := "/app/config/master.yaml"
 	if envConfig := os.Getenv("MASTER_CONFIG"); envConfig != "" {
 		configFile = envConfig
 	}

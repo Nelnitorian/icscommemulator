@@ -13,12 +13,15 @@ import yaml
 from typing import Dict, Any, Optional
 
 try:
-    from dnp3_python.dnp3station.outstation_new import MyOutStationNew
+    from dnp3_python.dnp3station.outstation import MyOutStationNew
     from pydnp3 import opendnp3
+    DNP3_AVAILABLE = True
+    _IMPORT_ERROR = None
 except ImportError as e:
-    print(f"Error importing dnp3-python: {e}")
-    print("Install with: pip install dnp3-python")
-    sys.exit(1)
+    MyOutStationNew = None
+    opendnp3 = None
+    DNP3_AVAILABLE = False
+    _IMPORT_ERROR = e
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -31,9 +34,15 @@ class DNP3Outstation:
     """DNP3 Outstation with YAML configuration support."""
 
     def __init__(self, config_file: Optional[str] = "/app/config/slave.yaml"):
+        if not DNP3_AVAILABLE:
+            raise RuntimeError(
+                f"dnp3-python not available: {_IMPORT_ERROR}. "
+                "Install with: pip install dnp3-python"
+            )
         self.config = (
             self._load_config(config_file) if config_file else self._default_config()
         )
+        self.config = self._normalize_config(self.config)
         self.ip = self.config["ip"]
         self.port = self.config["port"]
         self.outstation_id = self.config["outstation_id"]
@@ -45,7 +54,10 @@ class DNP3Outstation:
     def _load_config(self, config_file: str) -> Dict[str, Any]:
         try:
             with open(config_file, "r") as f:
-                return yaml.safe_load(f)
+                data = yaml.safe_load(f) or {}
+                if isinstance(data, dict) and "node" in data and "protocol" in data:
+                    return data.get("node", {})
+                return data
         except Exception as e:
             logger.error(f"Failed to load config file: {e}")
             raise
@@ -60,17 +72,79 @@ class DNP3Outstation:
             "binary_inputs": {"count": 20, "initial_values": []},
             "analog_output_status": {"count": 10, "initial_values": []},
             "binary_output_status": {"count": 10, "initial_values": []},
-            "simulation": {"enabled": False, "interval": 5},
+            "simulation": {"enabled": False, "interval": 5000},
         }
+
+    def _normalize_point_config(self, raw: Any, default_count: int) -> Dict[str, Any]:
+        if raw is None:
+            return {"count": default_count, "initial_values": []}
+
+        if isinstance(raw, dict) and ("count" in raw or "initial_values" in raw):
+            count = int(raw.get("count", default_count) or default_count)
+            initial_values = raw.get("initial_values", []) or []
+            return {"count": count, "initial_values": initial_values}
+
+        if isinstance(raw, dict):
+            initial_values = []
+            max_index = -1
+            for key, value in raw.items():
+                try:
+                    index = int(key)
+                except (TypeError, ValueError):
+                    continue
+                max_index = max(max_index, index)
+                if isinstance(value, dict):
+                    val = value.get("value", 0)
+                else:
+                    val = value
+                initial_values.append({"index": index, "value": val})
+            if max_index >= 0:
+                count = max_index + 1
+            else:
+                count = default_count
+            return {"count": count, "initial_values": initial_values}
+
+        return {"count": default_count, "initial_values": []}
+
+    def _normalize_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        normalized = dict(config)
+        normalized.setdefault("ip", "0.0.0.0")
+        normalized["port"] = int(normalized.get("port", 20000))
+        normalized["outstation_id"] = int(normalized.get("outstation_id", 1))
+        normalized["master_id"] = int(normalized.get("master_id", 2))
+        normalized["analog_inputs"] = self._normalize_point_config(
+            normalized.get("analog_inputs"), 20
+        )
+        normalized["binary_inputs"] = self._normalize_point_config(
+            normalized.get("binary_inputs"), 20
+        )
+        normalized["analog_output_status"] = self._normalize_point_config(
+            normalized.get("analog_output_status"), 10
+        )
+        normalized["binary_output_status"] = self._normalize_point_config(
+            normalized.get("binary_output_status"), 10
+        )
+        sim = normalized.get("simulation") or {}
+        sim.setdefault("enabled", False)
+        sim.setdefault("interval", 5000)
+        normalized["simulation"] = sim
+        return normalized
 
     def start(self):
         try:
             logger.info("Starting DNP3 outstation...")
+            db_sizes = {
+                "analog": int(self.config["analog_inputs"].get("count", 0)),
+                "binary": int(self.config["binary_inputs"].get("count", 0)),
+                "analog_output_status": int(self.config["analog_output_status"].get("count", 0)),
+                "binary_output_status": int(self.config["binary_output_status"].get("count", 0)),
+            }
             self.outstation = MyOutStationNew(
                 outstation_ip=self.ip,
                 port=self.port,
                 master_id=self.master_id,
                 outstation_id=self.outstation_id,
+                db_sizes=db_sizes,
             )
             self.outstation.start()
             self._initialize_points()
@@ -189,7 +263,8 @@ class DNP3Outstation:
     def run(self):
         sim_config = self.config.get("simulation", {})
         enable_simulation = sim_config.get("enabled", False)
-        interval = sim_config.get("interval", 5)
+        interval_ms = sim_config.get("interval", 5000)
+        interval = max(float(interval_ms) / 1000.0, 0.1)
         logger.info("DNP3 OUTSTATION RUNNING")
         try:
             counter = 0

@@ -26,4 +26,11 @@ type RunRequest struct {
 	Nodes          []adapter.Node `json:"nodes" validate:"required,dive"`
 	Edges          []adapter.Edge `json:"edges"`
 	SimulationTime int            `json:"simulation_time" validate:"required,min=1"`
+	Network        *NetworkConfig `json:"network,omitempty"`
+}
+
+// NetworkConfig defines optional network emulation controls for a run.
+type NetworkConfig struct {
+	RateLimitMBps     float64 `json:"rate_limit_mbytes_per_sec,omitempty"`
+	PacketLossPercent float64 `json:"packet_loss_percent,omitempty"`
 }

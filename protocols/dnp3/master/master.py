@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-DNP3 Master Station Implementation with CSV Configuration
+DNP3 Master Station Implementation with YAML/CSV Configuration
 
-Implements a DNP3 master station supporting operations configured via CSV file.
+Implements a DNP3 master station supporting operations configured via YAML
+(preferred) or CSV (legacy).
 
 Requires: dnp3-python >= 2.13.6
 """
@@ -12,16 +13,25 @@ import time
 import sys
 import threading
 import csv
+import os
 from typing import Dict, Any, List, Optional
 
+import yaml
+
 try:
-    from dnp3_python.dnp3station.master_new import MyMasterNew
+    from dnp3_python.dnp3station.master import MyMasterNew
     from dnp3_python.dnp3station.station_utils import SOEHandler
-    from pydnp3 import opendnp3
+    from pydnp3 import opendnp3, asiodnp3, openpal
+    DNP3_AVAILABLE = True
+    _IMPORT_ERROR = None
 except ImportError as e:
-    print(f"Error importing dnp3-python: {e}")
-    print("Install with: pip install dnp3-python")
-    sys.exit(1)
+    MyMasterNew = None
+    SOEHandler = None
+    opendnp3 = None
+    asiodnp3 = None
+    openpal = None
+    DNP3_AVAILABLE = False
+    _IMPORT_ERROR = e
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -30,22 +40,92 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class DNP3Operation:
-    """Represents a single DNP3 operation from CSV configuration."""
+def _to_int(value: Any, default: Optional[int] = None) -> Optional[int]:
+    if value is None or value == "":
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
-    def __init__(self, row: Dict[str, str]):
-        self.timestamp = int(row["timestamp"]) if row["timestamp"] else 0
-        self.ip = row["ip"]
-        self.port = int(row["port"])
-        self.operation_type = row["operation_type"]
-        self.group = int(row["group"]) if row["group"] else None
-        self.variation = int(row["variation"]) if row["variation"] else None
-        self.index = int(row["index"]) if row["index"] else None
-        self.master_id = int(row["master_id"])
-        self.outstation_id = int(row["outstation_id"])
-        self.recurrent = row["recurrent"].lower() == "true"
-        self.interval = float(row["interval"]) if row["interval"] else 0
-        self.value = row["value"]
+
+def _to_float(value: Any, default: float = 0.0) -> float:
+    if value is None or value == "":
+        return default
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _to_bool(value: Any, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in ("true", "1", "yes", "y")
+
+
+class DNP3Operation:
+    """Represents a single DNP3 operation from YAML/CSV configuration."""
+
+    def __init__(self, raw: Dict[str, Any]):
+        self.timestamp = _to_int(raw.get("timestamp"), 0) or 0
+        self.ip = raw.get("ip") or ""
+        self.port = _to_int(raw.get("port"), 0) or 0
+        self.operation_type = (raw.get("operation_type") or "").strip()
+        self.group = _to_int(raw.get("group"))
+        self.variation = _to_int(raw.get("variation"))
+        self.index = _to_int(raw.get("index"))
+        self.master_id = _to_int(raw.get("master_id"), 0) or 0
+        self.outstation_id = _to_int(raw.get("outstation_id"), 0) or 0
+        self.recurrent = _to_bool(raw.get("recurrent"), False)
+        self.interval = _to_float(raw.get("interval"), 0.0)
+        self.value = "" if raw.get("value") is None else str(raw.get("value"))
+
+        if self.operation_type in (
+            "send_binary_command",
+            "send_analog_command_float32",
+            "send_analog_command_int16",
+            "send_analog_command_int32",
+            "send_analog_command_double64",
+            "poll_group_variation_index",
+        ) and self.index is None:
+            self.index = 0
+
+
+class DNP3Connection:
+    def __init__(self, ip: str, port: int, master_id: int, outstation_id: int):
+        if not DNP3_AVAILABLE:
+            raise RuntimeError(
+                f"dnp3-python not available: {_IMPORT_ERROR}. "
+                "Install with: pip install dnp3-python"
+            )
+        self.ip = ip
+        self.port = port
+        self.master_id = master_id
+        self.outstation_id = outstation_id
+        self.soe_handler = SOEHandler(soehandler_log_level=logging.WARNING)
+        stack_config = asiodnp3.MasterStackConfig()
+        stack_config.master.responseTimeout = openpal.TimeDuration().Seconds(2)
+        none_class = getattr(opendnp3.ClassField, "None")()
+        stack_config.master.startupIntegrityClassMask = none_class
+        stack_config.master.unsolClassMask = none_class
+        stack_config.master.eventScanOnEventsAvailableClassMask = none_class
+        stack_config.link.RemoteAddr = self.outstation_id
+        stack_config.link.LocalAddr = self.master_id
+
+        self.master = MyMasterNew(
+            master_ip="0.0.0.0",
+            outstation_ip=self.ip,
+            port=self.port,
+            master_id=self.master_id,
+            outstation_id=self.outstation_id,
+            soe_handler=self.soe_handler,
+            stack_config=stack_config,
+            enable_scans=False,
+        )
+        self.master.start()
 
 
 class DNP3Master:
@@ -64,8 +144,13 @@ class DNP3Master:
         outstation_port=20000,
         master_id=2,
         outstation_id=1,
-        config_file: Optional[str] = "/app/config/master.csv",
+        config_file: Optional[str] = "/app/config/master.yaml",
     ):
+        if not DNP3_AVAILABLE:
+            raise RuntimeError(
+                f"dnp3-python not available: {_IMPORT_ERROR}. "
+                "Install with: pip install dnp3-python"
+            )
         """
         Initialize DNP3 master station.
 
@@ -80,11 +165,11 @@ class DNP3Master:
         self.outstation_port = outstation_port
         self.master_id = master_id
         self.outstation_id = outstation_id
-        self.soe_handler = SOEHandler(soehandler_log_level=logging.WARNING)
-        self.master = None
         self.operations: List[DNP3Operation] = []
         self.recurrent_threads: List[threading.Thread] = []
         self.running = False
+        self.connections: Dict[str, DNP3Connection] = {}
+        self.master: Optional[MyMasterNew] = None
 
         self.stats = {
             "polls_sent": 0,
@@ -97,75 +182,149 @@ class DNP3Master:
             self._load_operations(config_file)
 
         logger.info("DNP3 Master initialized")
-        logger.info(f"  Target outstation: {outstation_ip}:{outstation_port}")
-        logger.info(f"  Master ID: {master_id}")
-        logger.info(f"  Outstation ID: {outstation_id}")
+        logger.info(f"  Default outstation: {outstation_ip}:{outstation_port}")
+        logger.info(f"  Default Master ID: {master_id}")
+        logger.info(f"  Default Outstation ID: {outstation_id}")
         if config_file:
             logger.info(f"  Operations loaded: {len(self.operations)}")
 
     def _load_operations(self, config_file: str):
-        """Load operations from CSV file."""
+        """Load operations from YAML (preferred) or CSV (legacy)."""
         try:
             with open(config_file, "r") as f:
-                reader = csv.DictReader(f)
+                content = f.read()
+
+            is_csv = config_file.endswith(".csv") or content.lstrip().startswith("timestamp,")
+            if is_csv:
+                reader = csv.DictReader(content.splitlines())
                 self.operations = [DNP3Operation(row) for row in reader]
+            else:
+                raw = yaml.safe_load(content) or {}
+                messages = raw.get("messages") if isinstance(raw, dict) else raw
+                if not isinstance(messages, list):
+                    raise ValueError("YAML config must define a list of messages")
+                self.operations = [DNP3Operation(msg) for msg in messages]
+
             logger.info(f"Loaded {len(self.operations)} operations from {config_file}")
         except Exception as e:
             logger.error(f"Failed to load operations: {e}")
             raise
 
-    def connect(self) -> bool:
-        """Establish connection to the outstation."""
-        try:
-            logger.info("Connecting to outstation...")
-            self.master = MyMasterNew(
-                master_ip="0.0.0.0",
-                outstation_ip=self.outstation_ip,
-                port=self.outstation_port,
-                master_id=self.master_id,
-                outstation_id=self.outstation_id,
-                soe_handler=self.soe_handler,
+    def _connection_key(self, ip: str, port: int, master_id: int, outstation_id: int) -> str:
+        return f"{ip}:{port}|{master_id}->{outstation_id}"
+
+    def _resolve_connection_fields(self, operation: Optional[DNP3Operation]) -> Dict[str, int]:
+        ip = (operation.ip if operation and operation.ip else self.outstation_ip) or "127.0.0.1"
+        port = (operation.port if operation and operation.port else self.outstation_port) or 20000
+        master_id = (operation.master_id if operation and operation.master_id else self.master_id) or 2
+        outstation_id = (operation.outstation_id if operation and operation.outstation_id else self.outstation_id) or 1
+        return {"ip": ip, "port": port, "master_id": master_id, "outstation_id": outstation_id}
+
+    def _ensure_connection(self, operation: Optional[DNP3Operation] = None) -> DNP3Connection:
+        fields = self._resolve_connection_fields(operation)
+        key = self._connection_key(fields["ip"], fields["port"], fields["master_id"], fields["outstation_id"])
+        if key not in self.connections:
+            logger.info("Connecting to outstation %s:%d (master=%d, outstation=%d)",
+                        fields["ip"], fields["port"], fields["master_id"], fields["outstation_id"])
+            self.connections[key] = DNP3Connection(
+                ip=fields["ip"],
+                port=fields["port"],
+                master_id=fields["master_id"],
+                outstation_id=fields["outstation_id"],
             )
-            self.master.start()
-            time.sleep(2)
-            logger.info("Connection established")
+            time.sleep(1.0)
+        if self.master is None:
+            self.master = self.connections[key].master
+        return self.connections[key]
+
+    def connect(self) -> bool:
+        """Establish connections to all outstations referenced in the operations."""
+        try:
+            if not self.operations:
+                self._ensure_connection()
+            else:
+                for op in self.operations:
+                    self._ensure_connection(op)
+            if self.master is None and self.connections:
+                self.master = next(iter(self.connections.values())).master
             self.stats["start_time"] = time.time()
             return True
         except Exception as e:
             logger.error(f"Connection failed: {e}")
             return False
 
+    def _get_default_master(self) -> Optional[MyMasterNew]:
+        if self.master is not None:
+            return self.master
+        if self.connections:
+            self.master = next(iter(self.connections.values())).master
+            return self.master
+        return self._ensure_connection().master
+
     def execute_operation(self, operation: DNP3Operation):
         """Execute a single operation based on its type."""
         try:
             op_type = operation.operation_type
+            conn = self._ensure_connection(operation)
+            master = conn.master
 
             if op_type == "poll_analog_inputs":
-                self.poll_analog_inputs(operation.group, operation.variation)
+                group = operation.group if operation.group is not None else 30
+                variation = operation.variation if operation.variation is not None else 6
+                self.poll_analog_inputs(master, group, variation)
             elif op_type == "poll_binary_inputs":
-                self.poll_binary_inputs(operation.group, operation.variation)
+                group = operation.group if operation.group is not None else 1
+                variation = operation.variation if operation.variation is not None else 2
+                self.poll_binary_inputs(master, group, variation)
             elif op_type == "poll_analog_output_status":
-                self.poll_analog_output_status(operation.group, operation.variation)
+                group = operation.group if operation.group is not None else 40
+                variation = operation.variation if operation.variation is not None else 2
+                self.poll_analog_output_status(master, group, variation)
             elif op_type == "poll_binary_output_status":
-                self.poll_binary_output_status(operation.group, operation.variation)
+                group = operation.group if operation.group is not None else 10
+                variation = operation.variation if operation.variation is not None else 2
+                self.poll_binary_output_status(master, group, variation)
+            elif op_type == "poll_group_variation":
+                if operation.group is None or operation.variation is None:
+                    raise ValueError("poll_group_variation requires group and variation")
+                master.get_db_by_group_variation(operation.group, operation.variation)
+                self.stats["polls_sent"] += 1
+            elif op_type == "poll_group_variation_index":
+                if operation.group is None or operation.variation is None or operation.index is None:
+                    raise ValueError("poll_group_variation_index requires group, variation, index")
+                master.get_db_by_group_variation_index(operation.group, operation.variation, operation.index)
+                self.stats["polls_sent"] += 1
+            elif op_type == "poll_all":
+                master.send_scan_all_request()
+                self.stats["polls_sent"] += 1
             elif op_type == "send_binary_command":
+                if operation.index is None:
+                    raise ValueError("send_binary_command requires index")
                 value = operation.value == "1" or operation.value.lower() == "true"
-                self.send_binary_command(operation.index, value)
+                self.send_binary_command(master, operation.index, value)
             elif op_type == "send_analog_command_float32":
+                if operation.index is None:
+                    raise ValueError("send_analog_command_float32 requires index")
                 self.send_analog_command_float32(
-                    operation.index, float(operation.value)
+                    master, operation.index, float(operation.value)
                 )
             elif op_type == "send_analog_command_int16":
+                if operation.index is None:
+                    raise ValueError("send_analog_command_int16 requires index")
                 self.send_analog_command_int16(
-                    operation.index, int(float(operation.value))
+                    master, operation.index, int(float(operation.value))
                 )
             elif op_type == "send_analog_command_int32":
+                if operation.index is None:
+                    raise ValueError("send_analog_command_int32 requires index")
                 self.send_analog_command_int32(
-                    operation.index, int(float(operation.value))
+                    master, operation.index, int(float(operation.value))
                 )
             elif op_type == "send_analog_command_double64":
+                if operation.index is None:
+                    raise ValueError("send_analog_command_double64 requires index")
                 self.send_analog_command_double64(
-                    operation.index, float(operation.value)
+                    master, operation.index, float(operation.value)
                 )
             else:
                 logger.warning(f"Unknown operation type: {op_type}")
@@ -177,79 +336,72 @@ class DNP3Master:
         except Exception as e:
             logger.error(f"Error executing operation {operation.operation_type}: {e}")
 
-    def poll_analog_inputs(self, group: int = 30, variation: int = 6):
+    def poll_analog_inputs(self, master: Optional[MyMasterNew] = None, group: int = 30, variation: int = 6):
         """Poll analog inputs."""
         try:
+            if master is None:
+                master = self._get_default_master()
             logger.debug(f"Polling analog inputs (Group {group}, Var {variation})...")
-            result = self.master.get_db_by_group_variation(
-                group=group, variation=variation
-            )
+            result = master.get_db_by_group_variation(group=group, variation=variation)
             self.stats["polls_sent"] += 1
             return result
         except Exception as e:
             logger.error(f"Error polling analog inputs: {e}")
             return None
 
-    def poll_binary_inputs(self, group: int = 1, variation: int = 2):
+    def poll_binary_inputs(self, master: Optional[MyMasterNew] = None, group: int = 1, variation: int = 2):
         """Poll binary inputs."""
         try:
+            if master is None:
+                master = self._get_default_master()
             logger.debug(f"Polling binary inputs (Group {group}, Var {variation})...")
-            result = self.master.get_db_by_group_variation(
-                group=group, variation=variation
-            )
+            result = master.get_db_by_group_variation(group=group, variation=variation)
             self.stats["polls_sent"] += 1
             return result
         except Exception as e:
             logger.error(f"Error polling binary inputs: {e}")
             return None
 
-    def poll_analog_output_status(self, group: int = 40, variation: int = 2):
+    def poll_analog_output_status(self, master: Optional[MyMasterNew] = None, group: int = 40, variation: int = 2):
         """Poll analog output status."""
         try:
+            if master is None:
+                master = self._get_default_master()
             logger.debug(
                 f"Polling analog output status (Group {group}, Var {variation})..."
             )
-            result = self.master.get_db_by_group_variation(
-                group=group, variation=variation
-            )
+            result = master.get_db_by_group_variation(group=group, variation=variation)
             self.stats["polls_sent"] += 1
             return result
         except Exception as e:
             logger.error(f"Error polling analog output status: {e}")
             return None
 
-    def poll_binary_output_status(self, group: int = 10, variation: int = 2):
+    def poll_binary_output_status(self, master: Optional[MyMasterNew] = None, group: int = 10, variation: int = 2):
         """Poll binary output status."""
         try:
+            if master is None:
+                master = self._get_default_master()
             logger.debug(
                 f"Polling binary output status (Group {group}, Var {variation})..."
             )
-            result = self.master.get_db_by_group_variation(
-                group=group, variation=variation
-            )
+            result = master.get_db_by_group_variation(group=group, variation=variation)
             self.stats["polls_sent"] += 1
             return result
         except Exception as e:
             logger.error(f"Error polling binary output status: {e}")
             return None
 
-    def send_binary_command(self, index: int, state: bool) -> bool:
+    def send_binary_command(self, master: MyMasterNew, index: int, state: bool) -> bool:
         """Send binary control command."""
         try:
             logger.info(
                 f"Sending binary command: BO[{index}] = {'ON' if state else 'OFF'}"
             )
-            # CORRECCIÓN: Usar ControlRelayOutputBlock con ControlCode
-            if state:
-                command = opendnp3.ControlRelayOutputBlock(
-                    opendnp3.ControlCode.LATCH_ON
-                )
-            else:
-                command = opendnp3.ControlRelayOutputBlock(
-                    opendnp3.ControlCode.LATCH_OFF
-                )
-
-            self.master.send_direct_operate_command(command, index)
+            # Use ControlCode to avoid rawCode mutation crashes in bindings.
+            code = opendnp3.ControlCode.LATCH_ON if state else opendnp3.ControlCode.LATCH_OFF
+            command = opendnp3.ControlRelayOutputBlock(code)
+            master.send_direct_operate_command(command, index)
             self.stats["commands_sent"] += 1
             time.sleep(0.5)
             logger.info("  Command sent")
@@ -258,12 +410,12 @@ class DNP3Master:
             logger.error(f"  Command failed: {e}")
             return False
 
-    def send_analog_command_float32(self, index: int, value: float) -> bool:
+    def send_analog_command_float32(self, master: MyMasterNew, index: int, value: float) -> bool:
         """Send analog control command (Float32)."""
         try:
             logger.info(f"Sending analog command (Float32): AO[{index}] = {value}")
             command = opendnp3.AnalogOutputFloat32(float(value))
-            self.master.send_direct_operate_command(command, index)
+            master.send_direct_operate_command(command, index)
             self.stats["commands_sent"] += 1
             time.sleep(0.5)
             logger.info("  Command sent")
@@ -272,11 +424,11 @@ class DNP3Master:
             logger.error(f"  Command failed: {e}")
             return False
 
-    def send_analog_command_int16(self, index: int, value: int) -> bool:
+    def send_analog_command_int16(self, master: MyMasterNew, index: int, value: int) -> bool:
         """Send analog control command (Int16)."""
         try:
             logger.info(f"Sending analog command (Int16): AO[{index}] = {value}")
-            self.master.send_direct_point_command(
+            master.send_direct_point_command(
                 group=41, variation=2, index=index, val_to_set=int(value)
             )
             self.stats["commands_sent"] += 1
@@ -287,11 +439,11 @@ class DNP3Master:
             logger.error(f"  Command failed: {e}")
             return False
 
-    def send_analog_command_int32(self, index: int, value: int) -> bool:
+    def send_analog_command_int32(self, master: MyMasterNew, index: int, value: int) -> bool:
         """Send analog control command (Int32)."""
         try:
             logger.info(f"Sending analog command (Int32): AO[{index}] = {value}")
-            self.master.send_direct_point_command(
+            master.send_direct_point_command(
                 group=41, variation=1, index=index, val_to_set=int(value)
             )
             self.stats["commands_sent"] += 1
@@ -302,11 +454,11 @@ class DNP3Master:
             logger.error(f"  Command failed: {e}")
             return False
 
-    def send_analog_command_double64(self, index: int, value: float) -> bool:
+    def send_analog_command_double64(self, master: MyMasterNew, index: int, value: float) -> bool:
         """Send analog control command (Double64)."""
         try:
             logger.info(f"Sending analog command (Double64): AO[{index}] = {value}")
-            self.master.send_direct_point_command(
+            master.send_direct_point_command(
                 group=41, variation=4, index=index, val_to_set=float(value)
             )
             self.stats["commands_sent"] += 1
@@ -356,9 +508,7 @@ class DNP3Master:
 
     def display_current_values(self):
         """Display current values from all polled points."""
-        db = self.soe_handler.db
         logger.info("\nCURRENT VALUES:")
-
         point_types = [
             ("Analog", "Analog Inputs"),
             ("Binary", "Binary Inputs"),
@@ -366,14 +516,17 @@ class DNP3Master:
             ("BinaryOutputStatus", "Binary Output Status"),
         ]
 
-        for db_key, display_name in point_types:
-            values = db.get(db_key, {})
-            if values:
-                logger.info(f"\n  {display_name} ({len(values)} points):")
-                for idx, val in sorted(values.items())[:5]:
-                    logger.info(f"    [{idx}] = {val}")
-                if len(values) > 5:
-                    logger.info(f"    ... and {len(values)-5} more")
+        for key, conn in self.connections.items():
+            db = conn.soe_handler.db
+            logger.info(f"\n  Outstation {key}:")
+            for db_key, display_name in point_types:
+                values = db.get(db_key, {})
+                if values:
+                    logger.info(f"    {display_name} ({len(values)} points):")
+                    for idx, val in sorted(values.items())[:5]:
+                        logger.info(f"      [{idx}] = {val}")
+                    if len(values) > 5:
+                        logger.info(f"      ... and {len(values)-5} more")
 
     def display_statistics(self):
         """Display connection and operation statistics."""
@@ -393,14 +546,16 @@ class DNP3Master:
 
     def get_all_values(self) -> Dict[str, Any]:
         """Get all current point values."""
-        return dict(self.soe_handler.db)
+        if len(self.connections) == 1:
+            return dict(next(iter(self.connections.values())).soe_handler.db)
+        return {key: dict(conn.soe_handler.db) for key, conn in self.connections.items()}
 
     def shutdown(self):
         """Shutdown the master station gracefully."""
         try:
             self.running = False
-            if self.master:
-                self.master.shutdown()
+            for conn in self.connections.values():
+                conn.master.shutdown()
             logger.info("Master shutdown complete")
         except Exception as e:
             logger.error(f"Error during shutdown: {e}")
@@ -421,7 +576,10 @@ def main():
         "--outstation-id", type=int, default=1, help="DNP3 outstation address"
     )
     parser.add_argument(
-        "--config", type=str, required=True, help="Path to CSV configuration file"
+        "--config",
+        type=str,
+        default=os.getenv("MASTER_CONFIG", "/app/config/master.yaml"),
+        help="Path to YAML/CSV configuration file",
     )
     parser.add_argument(
         "--continuous",

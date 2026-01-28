@@ -3,89 +3,112 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Network Scenario Manager</title>
+    <title>ICSComm Emulator</title>
     <link rel="stylesheet" href="/static/css/roboto.css">
     <link rel="stylesheet" href="/static/css/index.css">
-
-    <script src="/static/js/lib/ipaddr.min.js"></script>
 </head>
 <body>
-    <div class="container">
-        <header class="page-header">
-            <h1>Network Scenario Manager</h1>
-            <p class="subtitle">Create and manage network simulation scenarios</p>
+    <div class="page">
+        <header class="app-header">
+            <div class="header-title">
+                <h1>ICSComm Emulator</h1>
+                <p>Diseña y ejecuta escenarios industriales con Modbus, DNP3 e IEC 104.</p>
+            </div>
+            <div class="header-actions">
+                <button class="button button-primary" id="showCreate" aria-pressed="true">
+                    <span>➕</span> Crear escenario
+                </button>
+                <button class="button button-secondary" id="showList" aria-pressed="false">
+                    <span>📂</span> Mis escenarios
+                </button>
+            </div>
         </header>
 
-        <main class="main-content">
-            <nav class="action-buttons">
-                <button id="newScenarioButton" class="button button-primary" onclick="showForm()">
-                    <span class="button-icon">➕</span>
-                    New Scenario
-                </button>
-                <button id="loadScenarioButton" class="button button-secondary" onclick="loadScenario()">
-                    <span class="button-icon">📂</span>
-                    Load Scenario
-                </button>
-            </nav>
-
-            <!-- New Scenario Form -->
-            <section id="form-container" class="form-container">
-                <h2 class="section-title">Create New Scenario</h2>
-                <form id="scenario-form" onsubmit="submitForm(event)">
+        <main class="app-main">
+            <section class="panel" id="createPanel">
+                <h2>Nuevo escenario</h2>
+                <form id="scenarioForm" autocomplete="off">
                     <div class="form-group">
-                        <label for="projectName">Project Name</label>
-                        <input type="text" id="projectName" name="projectName" 
-                               placeholder="Enter project name" required>
+                        <label for="projectName">Nombre del proyecto</label>
+                        <input type="text" id="projectName" name="projectName" placeholder="planta_modbus" required>
+                        <p class="helper-text">Usa un nombre descriptivo para identificarlo rápidamente.</p>
                     </div>
 
                     <div class="form-group">
-                        <label for="ipSubrange">IP Subrange</label>
-                        <input type="text" id="ipSubrange" name="ipSubrange" 
-                               placeholder="192.168.100.0/24" required>
+                        <label for="ipSubrange">Subred IPv4</label>
+                        <input type="text" id="ipSubrange" name="ipSubrange" placeholder="192.168.100.0/24" required>
+                        <p class="helper-text">Se asignarán IPs automáticas dentro de la subred.</p>
                     </div>
 
                     <div class="form-group">
-                        <label for="protocol">Protocol</label>
+                        <label for="protocol">Protocolo</label>
                         <select id="protocol" name="protocol" required>
                             <option value="modbus">Modbus</option>
                             <option value="dnp3">DNP3</option>
                             <option value="iec104">IEC 104</option>
                         </select>
+                        <p class="helper-text">Selecciona el protocolo principal del escenario.</p>
                     </div>
 
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="masterNodes">Master Nodes</label>
-                            <input type="number" id="masterNodes" name="masterNodes" 
-                                   min="1" value="1" required>
+                            <label for="masterNodes">Nodos master</label>
+                            <input type="number" id="masterNodes" name="masterNodes" min="1" value="1" required>
                         </div>
 
                         <div class="form-group">
-                            <label for="slaveNodes">Slave Nodes</label>
-                            <input type="number" id="slaveNodes" name="slaveNodes" 
-                                   min="1" value="2" required>
+                            <label for="slaveNodes">Nodos slave</label>
+                            <input type="number" id="slaveNodes" name="slaveNodes" min="1" value="2" required>
                         </div>
                     </div>
 
                     <div class="form-actions">
-                        <button type="button" class="button button-cancel" onclick="cancelForm()">
-                            Cancel
-                        </button>
-                        <button type="submit" class="button button-success">
-                            Create Scenario
-                        </button>
+                        <button type="reset" class="button button-secondary">Limpiar</button>
+                        <button type="submit" class="button button-success">Crear escenario</button>
                     </div>
                 </form>
             </section>
 
-            <!-- Load Scenario Section -->
-            <section id="load-container" class="load-container">
-                <h2 class="section-title">Available Scenarios</h2>
-                <div id="scenario-list" class="scenario-grid"></div>
+            <section class="panel" id="listPanel">
+                <div class="list-header">
+                    <div>
+                        <h2>Escenarios guardados</h2>
+                        <p>Selecciona un escenario para abrirlo o eliminarlo.</p>
+                    </div>
+                    <button class="button button-secondary" id="refreshList">Actualizar</button>
+                </div>
+
+                <div class="scenario-grid" id="scenarioList"></div>
+                <div class="empty-state" id="emptyList">
+                    <p>No hay escenarios guardados todavía.</p>
+                </div>
+            </section>
+
+            <section class="panel panel-info is-static">
+                <h2>Buenas prácticas</h2>
+                <div class="info-card">
+                    <h3>Checklist rápido</h3>
+                    <ul class="info-list">
+                        <li>Define una subred limpia y consistente.</li>
+                        <li>Usa al menos un master y un slave.</li>
+                        <li>Configura mensajes desde masters antes de ejecutar.</li>
+                        <li>Guarda cambios frecuentemente.</li>
+                    </ul>
+                </div>
+                <div class="info-card">
+                    <h3>Protocolos soportados</h3>
+                    <div class="protocol-tags">
+                        <span class="tag tag-modbus">Modbus</span>
+                        <span class="tag tag-dnp3">DNP3</span>
+                        <span class="tag tag-iec">IEC 104</span>
+                    </div>
+                    <p class="helper-text">Cada protocolo habilita paneles específicos para masters y slaves.</p>
+                </div>
             </section>
         </main>
     </div>
 
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="/static/js/index.js"></script>
 </body>
 </html>

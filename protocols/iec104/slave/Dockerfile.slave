@@ -1,16 +1,53 @@
-FROM python:3.12-slim
+# Build stage
+FROM golang:1.21-alpine AS build
 
 WORKDIR /app
 
-# Install c104 and dependencies
-RUN pip install --no-cache-dir \
-    c104 \
-    pyyaml
+RUN apk add --no-cache git
 
-# Copy application code
-COPY server.py ./
+COPY main.go ./
 
-# Expose IEC 104 port
+RUN go mod init iec104-slave && \
+    go get github.com/juanjorosendo/go-iecp5@v0.0.1 && \
+    go get github.com/sirupsen/logrus@v1.9.3 && \
+    go get gopkg.in/yaml.v3@v3.0.1
+
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o slave ./main.go
+
+# Tiny TCP healthcheck binary (avoids nc + shell)
+RUN cat <<'EOF' >/tmp/healthcheck.go
+package main
+
+import (
+	"fmt"
+	"net"
+	"os"
+	"time"
+)
+
+func main() {
+	if len(os.Args) < 3 {
+		fmt.Println("usage: healthcheck <host> <port>")
+		os.Exit(2)
+	}
+	addr := net.JoinHostPort(os.Args[1], os.Args[2])
+	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	_ = conn.Close()
+}
+EOF
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o healthcheck /tmp/healthcheck.go
+
+FROM scratch
+
+WORKDIR /app
+
+COPY --from=build /app/slave /app/slave
+COPY --from=build /app/healthcheck /app/healthcheck
+
 EXPOSE 2404
 
-ENTRYPOINT ["python3", "server.py"]
+ENTRYPOINT ["/app/slave"]

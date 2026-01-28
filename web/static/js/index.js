@@ -1,255 +1,144 @@
-// ===================================
-// CONSTANTS
-// ===================================
-const API_ENDPOINTS = {
-    NETWORKS: '/api/networks/'
-};
+(() => {
+    'use strict';
 
-const MESSAGES = {
-    INVALID_IP: 'Please enter a valid IP subrange (e.g., 192.168.100.0/24).',
-    INVALID_MASTER_NODES: 'Please enter a valid number of master nodes.',
-    INVALID_SLAVE_NODES: 'Please enter a valid number of slave nodes.',
-    ERROR_PREFIX: 'Error creating the scenario: '
-};
-
-// ===================================
-// DOM ELEMENTS CACHE
-// ===================================
-const elements = {
-    formContainer: () => document.getElementById('form-container'),
-    loadContainer: () => document.getElementById('load-container'),
-    scenarioForm: () => document.getElementById('scenario-form'),
-    scenarioList: () => document.getElementById('scenario-list'),
-    newScenarioBtn: () => document.getElementById('newScenarioButton'),
-    loadScenarioBtn: () => document.getElementById('loadScenarioButton'),
-    projectName: () => document.getElementById('projectName'),
-    ipSubrange: () => document.getElementById('ipSubrange'),
-    protocol: () => document.getElementById('protocol'),
-    masterNodes: () => document.getElementById('masterNodes'),
-    slaveNodes: () => document.getElementById('slaveNodes')
-};
-
-// ===================================
-// UI STATE MANAGEMENT
-// ===================================
-const UIState = {
-    clearActiveStates() {
-        elements.formContainer().style.display = 'none';
-        elements.loadContainer().style.display = 'none';
-        elements.newScenarioBtn().classList.remove('active');
-        elements.loadScenarioBtn().classList.remove('active');
-    },
-    
-    showForm() {
-        this.clearActiveStates();
-        elements.formContainer().style.display = 'block';
-        elements.newScenarioBtn().classList.add('active');
-    },
-    
-    showLoadContainer() {
-        this.clearActiveStates();
-        elements.loadContainer().style.display = 'block';
-        elements.loadScenarioBtn().classList.add('active');
-    }
-};
-
-// ===================================
-// IP ADDRESS UTILITIES
-// ===================================
-const IPUtils = {
-    parseNetwork(subnet) {
-        try {
-            // Validación más robusta del formato CIDR
-            if (!subnet || typeof subnet !== 'string') {
-                return null;
-            }
-            
-            const parts = subnet.split('/');
-            if (parts.length !== 2) {
-                return null;
-            }
-            
-            const mask = parseInt(parts[1]);
-            if (isNaN(mask) || mask < 0 || mask > 32) {
-                return null;
-            }
-            
-            // Validar que la IP base es válida
-            if (!ipaddr.isValid(parts[0])) {
-                return null;
-            }
-            
-            const networkAddr = ipaddr.IPv4.networkAddressFromCIDR(subnet);
-            return `${networkAddr.toString()}/${mask}`;
-        } catch (error) {
-            console.error('Error parsing network:', error);
-            return null;
-        }
-    },
-    
-    getNextIP(ipAddress, subnet) {
-        const ip = ipaddr.parse(ipAddress);
-        const subnetParsed = ipaddr.parseCIDR(subnet);
-        
-        if (!ip.match(subnetParsed)) {
-            throw new Error('The IP does not belong to the specified subnet.');
-        }
-        
-        const nextIp = ip.toByteArray();
-        
-        for (let i = nextIp.length - 1; i >= 0; i--) {
-            if (nextIp[i] < 255) {
-                nextIp[i]++;
-                break;
-            }
-            nextIp[i] = 0;
-        }
-        
-        return ipaddr.fromByteArray(nextIp).toString();
-    }
-};
-
-// ===================================
-// FORM VALIDATION
-// ===================================
-const FormValidator = {
-    validateIPSubrange(ipSubrange) {
-        const validIP = IPUtils.parseNetwork(ipSubrange);
-        if (!validIP) {
-            alert(MESSAGES.INVALID_IP);
-            return null;
-        }
-        return validIP;
-    },
-    
-    validateNodeCount(value, fieldName) {
-        const count = parseInt(value);
-        if (isNaN(count) || count <= 0) {
-            alert(fieldName === 'master' ? MESSAGES.INVALID_MASTER_NODES : MESSAGES.INVALID_SLAVE_NODES);
-            return null;
-        }
-        return count;
-    },
-    
-    sanitizeProjectName(name) {
-        return name.replace(/\s/g, '_');
-    }
-};
-
-// ===================================
-// API COMMUNICATION
-// ===================================
-const API = {
-    async createNetwork(data) {
-        const response = await fetch(API_ENDPOINTS.NETWORKS, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        return response.json();
-    },
-    
-    async fetchScenarios() {
-        const response = await fetch(API_ENDPOINTS.NETWORKS);
-        return response.json();
-    }
-};
-
-// ===================================
-// SCENARIO MANAGEMENT
-// ===================================
-const ScenarioManager = {
-    async loadList() {
-        try {
-            const scenarios = await API.fetchScenarios();
-            this.renderScenarioList(scenarios);
-        } catch (error) {
-            console.error('Error fetching scenarios:', error);
-            alert('Failed to load scenarios. Please try again.');
-        }
-    },
-    
-    renderScenarioList(scenarios) {
-        const listContainer = elements.scenarioList();
-        listContainer.innerHTML = '';
-        
-        scenarios.forEach(scenario => {
-            const item = document.createElement('div');
-            item.className = 'scenario-item';
-            item.textContent = scenario;
-            item.addEventListener('click', () => this.loadScenario(scenario));
-            listContainer.appendChild(item);
-        });
-    },
-    
-    loadScenario(scenarioName) {
-        window.location.href = `networks/${scenarioName}`;
-    },
-    
-    async create(formData) {
-        try {
-            const result = await API.createNetwork(formData);
-            
-            if (result.status === 200) {
-                console.log('Network created successfully:', result);
-                window.location.href = `networks/${formData.projectName}`;
-            } else {
-                throw new Error(result.error || 'Unknown error');
-            }
-        } catch (error) {
-            console.error('Error creating scenario:', error);
-            alert(MESSAGES.ERROR_PREFIX + error.message);
-        }
-    }
-};
-
-// ===================================
-// PUBLIC API / EVENT HANDLERS
-// ===================================
-function loadScenario() {
-    UIState.showLoadContainer();
-    ScenarioManager.loadList();
-}
-
-function showForm() {
-    UIState.showForm();
-}
-
-function submitForm(event) {
-    event.preventDefault();
-    
-    // Get form values
-    const projectName = elements.projectName().value;
-    const ipSubrange = elements.ipSubrange().value;
-    const protocol = elements.protocol().value;
-    const masterNodes = elements.masterNodes().value;
-    const slaveNodes = elements.slaveNodes().value;
-    
-    // Validate inputs
-    const validIP = FormValidator.validateIPSubrange(ipSubrange);
-    if (!validIP) return;
-    
-    const validMasterCount = FormValidator.validateNodeCount(masterNodes, 'master');
-    if (validMasterCount === null) return;
-    
-    const validSlaveCount = FormValidator.validateNodeCount(slaveNodes, 'slave');
-    if (validSlaveCount === null) return;
-    
-    // Prepare data
-    const parsedProjectName = FormValidator.sanitizeProjectName(projectName);
-    const data = {
-        projectName: parsedProjectName,
-        ipSubrange: validIP,
-        protocol: protocol,
-        masterNodes: validMasterCount,
-        slaveNodes: validSlaveCount
+    const DOM = {
+        showCreate: document.getElementById('showCreate'),
+        showList: document.getElementById('showList'),
+        createPanel: document.getElementById('createPanel'),
+        listPanel: document.getElementById('listPanel'),
+        form: document.getElementById('scenarioForm'),
+        projectName: document.getElementById('projectName'),
+        ipSubrange: document.getElementById('ipSubrange'),
+        protocol: document.getElementById('protocol'),
+        masterNodes: document.getElementById('masterNodes'),
+        slaveNodes: document.getElementById('slaveNodes'),
+        scenarioList: document.getElementById('scenarioList'),
+        emptyList: document.getElementById('emptyList'),
+        refreshList: document.getElementById('refreshList'),
+        toast: document.getElementById('toast')
     };
-    
-    // Submit
-    ScenarioManager.create(data);
-}
 
-function cancelForm() {
-    elements.scenarioForm().reset();
-    UIState.clearActiveStates();
-}
+    function showPanel(panel) {
+        const isCreate = panel === 'create';
+        DOM.createPanel.classList.toggle('active', isCreate);
+        DOM.listPanel.classList.toggle('active', !isCreate);
+        DOM.showCreate.setAttribute('aria-pressed', isCreate ? 'true' : 'false');
+        DOM.showList.setAttribute('aria-pressed', isCreate ? 'false' : 'true');
+    }
+
+    function showToast(message, isError = false) {
+        DOM.toast.textContent = message;
+        DOM.toast.style.background = isError ? '#b91c1c' : '#111827';
+        DOM.toast.classList.add('show');
+        setTimeout(() => DOM.toast.classList.remove('show'), 3500);
+    }
+
+    async function fetchJSON(url, options = {}) {
+        const response = await fetch(url, options);
+        let data = {};
+        try {
+            data = await response.json();
+        } catch (err) {
+            data = {};
+        }
+        if (!response.ok) {
+            const message = data.error || data.message || `Error ${response.status}`;
+            throw new Error(message);
+        }
+        return data;
+    }
+
+    async function loadScenarios() {
+        DOM.scenarioList.innerHTML = '';
+        DOM.emptyList.style.display = 'none';
+
+        try {
+            const scenarios = await fetchJSON('/api/networks/');
+            if (!Array.isArray(scenarios) || scenarios.length === 0) {
+                DOM.emptyList.style.display = 'block';
+                return;
+            }
+
+            scenarios.forEach(name => {
+                const card = document.createElement('div');
+                card.className = 'scenario-item';
+                card.innerHTML = `
+                    <h3>${name}</h3>
+                    <div class="scenario-actions">
+                        <button class="button button-primary" data-action="open">Abrir</button>
+                        <button class="button button-secondary" data-action="delete">Borrar</button>
+                    </div>
+                `;
+                card.dataset.name = name;
+                DOM.scenarioList.appendChild(card);
+            });
+        } catch (err) {
+            showToast(err.message, true);
+        }
+    }
+
+    async function handleCreate(event) {
+        event.preventDefault();
+        const payload = {
+            projectName: DOM.projectName.value.trim(),
+            ipSubrange: DOM.ipSubrange.value.trim(),
+            protocol: DOM.protocol.value,
+            masterNodes: Number(DOM.masterNodes.value),
+            slaveNodes: Number(DOM.slaveNodes.value)
+        };
+
+        try {
+            await fetchJSON('/api/networks/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            showToast('Escenario creado correctamente');
+            window.location.href = `/networks/${encodeURIComponent(payload.projectName)}`;
+        } catch (err) {
+            showToast(err.message, true);
+        }
+    }
+
+    async function handleScenarioAction(event) {
+        const action = event.target.dataset.action;
+        if (!action) return;
+        const card = event.target.closest('.scenario-item');
+        if (!card) return;
+        const name = card.dataset.name;
+
+        if (action === 'open') {
+            window.location.href = `/networks/${encodeURIComponent(name)}`;
+            return;
+        }
+
+        if (action === 'delete') {
+            if (!confirm(`¿Eliminar el escenario "${name}"?`)) return;
+            try {
+                await fetchJSON(`/api/networks/${encodeURIComponent(name)}`, { method: 'DELETE' });
+                showToast('Escenario eliminado');
+                loadScenarios();
+            } catch (err) {
+                showToast(err.message, true);
+            }
+        }
+    }
+
+    function bindEvents() {
+        DOM.showCreate.addEventListener('click', () => showPanel('create'));
+        DOM.showList.addEventListener('click', () => {
+            showPanel('list');
+            loadScenarios();
+        });
+        DOM.refreshList.addEventListener('click', loadScenarios);
+        DOM.form.addEventListener('submit', handleCreate);
+        DOM.scenarioList.addEventListener('click', handleScenarioAction);
+    }
+
+    function init() {
+        bindEvents();
+        showPanel('create');
+    }
+
+    init();
+})();

@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"math"
 
 	"icscommemulator/pkg/adapter"
 	"icscommemulator/pkg/logger"
@@ -25,10 +26,6 @@ func NewHandlers(storage scenario.Storage, scenarioSvc *service.ScenarioService)
 		scenarioService: scenarioSvc,
 	}
 }
-
-// ============================================================================
-// Network/Scenario Handlers
-// ============================================================================
 
 func (h *Handlers) HandleNetworks(w http.ResponseWriter, r *http.Request) {
 	path := extractPathSegment(r.URL.Path, "/api/networks/")
@@ -87,7 +84,6 @@ func (h *Handlers) handleCreateNetwork(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validar campos requeridos
 	if req.ProjectName == "" || req.IPSubrange == "" || req.Protocol == "" {
 		sendError(w, "Missing required parameters", http.StatusBadRequest)
 		return
@@ -98,20 +94,17 @@ func (h *Handlers) handleCreateNetwork(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verificar si ya existe
 	if h.scenarioStorage.CheckScenarioExists(req.ProjectName) {
 		sendError(w, "Project already exists", http.StatusBadRequest)
 		return
 	}
 
-	// Parsear red IP
 	_, ipNet, err := net.ParseCIDR(req.IPSubrange)
 	if err != nil {
 		sendError(w, "Invalid IP range", http.StatusBadRequest)
 		return
 	}
 
-	// Generar nodos usando adapter
 	baseIP := incrementIP(incrementIP(ipNet.IP))
 	nodes, edges := adapter.GenerateNetworkNodes(
 		adapter.Protocol(req.Protocol),
@@ -120,7 +113,6 @@ func (h *Handlers) handleCreateNetwork(w http.ResponseWriter, r *http.Request) {
 		req.SlaveNodes,
 	)
 
-	// Crear estructura de red
 	networkData := adapter.CytoscapeData{
 		Protocol:  req.Protocol,
 		IPNetwork: ipNet.String(),
@@ -128,7 +120,6 @@ func (h *Handlers) handleCreateNetwork(w http.ResponseWriter, r *http.Request) {
 		Edges:     edges,
 	}
 
-	// Guardar escenario
 	if err := h.scenarioStorage.SaveScenario(req.ProjectName, networkData); err != nil {
 		sendError(w, fmt.Sprintf("Failed to save scenario: %v", err), http.StatusInternalServerError)
 		return
@@ -156,14 +147,12 @@ func (h *Handlers) handleUpdateNetwork(w http.ResponseWriter, r *http.Request, n
 		return
 	}
 
-	// Validar escenario usando la misma función que en run
 	logs := adapter.ValidateCytoscapeScenario(data, adapter.ERROR)
 	if len(logs) > 0 {
 		sendError(w, strings.Join(logs, "; "), http.StatusBadRequest)
 		return
 	}
 
-	// Guardar escenario
 	if err := h.scenarioStorage.SaveScenario(name, data); err != nil {
 		sendError(w, fmt.Sprintf("Failed to save scenario: %v", err), http.StatusInternalServerError)
 		return
@@ -184,10 +173,6 @@ func (h *Handlers) handleDeleteNetwork(w http.ResponseWriter, r *http.Request, n
 	logger.Info("Successfully deleted scenario: %s", name)
 	sendJSON(w, APIResponse{Message: fmt.Sprintf("Scenario %s deleted", name)})
 }
-
-// ============================================================================
-// Run Handlers - LÓGICA UNIFICADA
-// ============================================================================
 
 func (h *Handlers) HandleRun(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -210,7 +195,6 @@ func (h *Handlers) handleRunScenario(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validaciones básicas
 	if req.Protocol == "" || req.IPNetwork == "" {
 		sendError(w, "Missing required fields: protocol and ip_network", http.StatusBadRequest)
 		return
@@ -221,7 +205,17 @@ func (h *Handlers) handleRunScenario(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Crear CytoscapeData desde el request
+	if req.Network != nil {
+		if math.IsNaN(req.Network.RateLimitMBps) || req.Network.RateLimitMBps < 0 {
+			sendError(w, "rate_limit_mbytes_per_sec must be >= 0", http.StatusBadRequest)
+			return
+		}
+		if math.IsNaN(req.Network.PacketLossPercent) || req.Network.PacketLossPercent < 0 || req.Network.PacketLossPercent > 100 {
+			sendError(w, "packet_loss_percent must be between 0 and 100", http.StatusBadRequest)
+			return
+		}
+	}
+
 	cytoscapeData := adapter.CytoscapeData{
 		Protocol:  req.Protocol,
 		IPNetwork: req.IPNetwork,
@@ -229,11 +223,19 @@ func (h *Handlers) handleRunScenario(w http.ResponseWriter, r *http.Request) {
 		Edges:     req.Edges,
 	}
 
-	// TODA LA LÓGICA AHORA ESTÁ EN EL SERVICIO
-	// Ya no duplicamos conversión, validación ni generación aquí
+	// Keep conversion/validation in the service layer.
+	var networkEmulation *service.NetworkEmulation
+	if req.Network != nil {
+		networkEmulation = &service.NetworkEmulation{
+			RateLimitMBps:     req.Network.RateLimitMBps,
+			PacketLossPercent: req.Network.PacketLossPercent,
+		}
+	}
+
 	result, err := h.scenarioService.RunScenario(service.RunScenarioRequest{
 		CytoscapeData:  cytoscapeData,
 		SimulationTime: req.SimulationTime,
+		Network:        networkEmulation,
 	})
 
 	if err != nil {
@@ -241,7 +243,6 @@ func (h *Handlers) handleRunScenario(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Enviar respuesta
 	response := map[string]interface{}{
 		"message":         result.Message,
 		"simulation_time": result.SimulationTime,

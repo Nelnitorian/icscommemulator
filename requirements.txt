@@ -3,3 +3,5 @@ pytest
 flask
 pandas
 waitress
+pyyaml
+-e ./lib/dnp3-python

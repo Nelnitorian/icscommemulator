@@ -1,267 +1,328 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="es">
 <head>
-  <title>Network Graph</title>
+  <meta charset="UTF-8">
+  <title>Editor de red</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="/static/js/lib/cytoscape.3.18.1.min.js"></script>
   <script src="/static/js/lib/ipaddr.min.js"></script>
-  <link rel="stylesheet" type="text/css" href="/static/css/roboto.css">
-  <link rel="stylesheet" type="text/css" href="/static/css/network.css">
-  </link>
+  <link rel="stylesheet" href="/static/css/roboto.css">
+  <link rel="stylesheet" href="/static/css/network.css">
 </head>
-
 <body>
-  <div id="instructions">
-    <p><strong>Long Press</strong>: Opens configuration / Generates node.</p>
-    <p><strong>Short Press on Node</strong>: Selects / Links with another.</p>
-    <p><strong>Delete</strong>: Remove.</p>
-    <p><strong>Ctrl+Z/Y</strong>: Undo/Redo.</p>
-    <p><strong>Esc</strong>: Cancel.</p>
-  </div>
-
-  <div id="toolbar">
-    <button id="runButton" onclick="run()">Run</button>
-    <button id="saveButton" onclick="save()">Save</button>
-  </div>
-
-  <div id="zoom-controls">
-    <button id="zoom-in" onclick="zoomIn()">+</button>
-    <button id="zoom-out" onclick="zoomOut()">-</button>
-  </div>
-
-  <div id="error-message"></div>
-  <div id="configPopup" class="configPopup">
-    <form id="configForm">
-      <!-- General config -->
-      <div class="form-row single-line">
-        <label for="name">Name</label>
-        <input type="text" id="name" name="name">
-      </div>
-      <div class="form-row">
-        <label for="comment">Comment</label>
-        <input type="text" id="comment" name="comment">
-      </div>
-      <div class="form-row single-line">
-        <label for="role">Role</label>
-        <select id="role" name="role">
-          <option value="master">Master</option>
-          <option value="slave">Slave</option>
-        </select>
-      </div>
-      <div class="form-row single-line">
-        <label for="ip">IP</label>
-        <input type="text" id="ip" name="ip">
-      </div>
-
-      <div class="form-row single-line">
-        <label for="mac">MAC</label>
-        <input type="text" id="mac" name="mac">
-      </div>
-
-      <!-- Slave config -->
-      <div class="form-row" id="slave-config" style="display: none;">
-        <div class="form-row single-line">
-          <label for="port">Port</label>
-          <input type="text" id="port" name="port">
-        </div>
-        <div class="form-row single-line">
-          <label for="slave_id">Slave ID</label>
-          <input type="text" id="slave_id" name="slave_id">
-        </div>
-
-        <div class="form-row single-line">
-          <label>Registers</label>
-          <button onclick="showRegistersConfiguration(event)">Configure</button>
-        </div>
-
-        <div class="form-row single-line">
-          <label>Identity</label>
-          <button onclick="showIdentityConfiguration(event)">Configure</button>
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="header-left">
+        <h1>Editor de escenarios</h1>
+        <div class="header-meta">
+          <span class="badge badge-dark" id="scenarioName"></span>
+          <span class="badge badge-protocol" id="scenarioProtocol"></span>
+          <span class="badge badge-muted" id="scenarioNetwork"></span>
         </div>
       </div>
-    </form>
-  </div>
+      <div class="header-actions">
+        <button class="button" id="btnAddNode">➕ Nodo</button>
+        <button class="button" id="btnLayout">🧭 Layout</button>
+        <button class="button button-primary" id="btnSave">💾 Guardar</button>
+        <button class="button button-success" id="btnRun">▶ Ejecutar</button>
+      </div>
+    </header>
 
-
-  <!-- Registers config -->
-  <div id="registersPanel" style="display: none;" class="configPopup">
-      <form>
-          <!-- Discrete Inputs -->
-          <div class="form-row header">
-              <label>Discrete Inputs</label>
+    <div class="app-body">
+      <aside class="side-panel">
+        <section class="panel" id="scenarioPanel">
+          <h2>Resumen</h2>
+          <div class="info-grid">
+            <div>
+              <span class="label">Nodos</span>
+              <span id="nodesCount">0</span>
+            </div>
+            <div>
+              <span class="label">Enlaces</span>
+              <span id="edgesCount">0</span>
+            </div>
           </div>
-          <div class="form-row single-line">
-              <label for="discrete_inputs_type">Type</label>
-              <select id="discrete_inputs_type" name="discrete_inputs_type">
-                  <option value="sequential">Sequential</option>
-                  <option value="sparse">Sparse</option>
+          <div class="helper-block">
+            <p><strong>Gestos:</strong> click en nodo para seleccionar; click en otro nodo para crear enlace.</p>
+            <p><strong>Teclas:</strong> Supr/Delete para borrar; Esc para limpiar selección.</p>
+          </div>
+        </section>
+
+        <section class="panel hidden" id="nodePanel">
+          <div class="panel-title-row">
+            <h2>Configuración de nodo</h2>
+            <button type="button" class="button button-secondary" id="jumpAttacks">Ver ataques</button>
+          </div>
+          <form id="nodeForm">
+            <div class="form-group">
+              <label for="nodeName">Nombre</label>
+              <input type="text" id="nodeName" name="nodeName" required>
+            </div>
+            <div class="form-group">
+              <label for="nodeRole">Rol</label>
+              <select id="nodeRole" name="nodeRole">
+                <option value="master">Master</option>
+                <option value="slave">Slave</option>
               </select>
+            </div>
+            <div class="form-group">
+              <label for="nodeIp">IP</label>
+              <input type="text" id="nodeIp" name="nodeIp" required>
+            </div>
+            <div class="form-group">
+              <label for="nodePort">Puerto</label>
+              <input type="text" id="nodePort" name="nodePort">
+            </div>
+            <div class="form-group">
+              <label for="nodeComment">Comentario</label>
+              <textarea id="nodeComment" name="nodeComment" rows="2"></textarea>
+            </div>
+
+            <div class="protocol-block" id="modbusBlock">
+              <h3>Modbus</h3>
+              <div class="form-group">
+                <label for="nodeSlaveId">Slave ID</label>
+                <input type="number" id="nodeSlaveId" name="nodeSlaveId" min="1">
+              </div>
+              <div class="form-group">
+                <label for="holdingRegisters">Holding registers</label>
+                <textarea id="holdingRegisters" rows="3" placeholder="0:10\n1:42"></textarea>
+              </div>
+              <div class="form-group">
+                <label for="inputRegisters">Input registers</label>
+                <textarea id="inputRegisters" rows="3" placeholder="0:11\n1:12"></textarea>
+              </div>
+              <div class="form-group">
+                <label for="coils">Coils</label>
+                <textarea id="coils" rows="2" placeholder="0:1\n1:0"></textarea>
+              </div>
+              <div class="form-group">
+                <label for="discreteInputs">Discrete inputs</label>
+                <textarea id="discreteInputs" rows="2" placeholder="0:1\n1:0"></textarea>
+              </div>
+              <div class="form-group">
+                <label for="vendorName">Vendor name</label>
+                <input type="text" id="vendorName">
+              </div>
+              <div class="form-group">
+                <label for="productCode">Product code</label>
+                <input type="text" id="productCode">
+              </div>
+              <div class="form-group">
+                <label for="productName">Product name</label>
+                <input type="text" id="productName">
+              </div>
+              <div class="form-group">
+                <label for="modelName">Model name</label>
+                <input type="text" id="modelName">
+              </div>
+              <div class="form-group">
+                <label for="majorMinorRevision">Revision</label>
+                <input type="text" id="majorMinorRevision">
+              </div>
+              <div class="form-group">
+                <label for="vendorUrl">Vendor URL</label>
+                <input type="text" id="vendorUrl">
+              </div>
+              <div class="form-group">
+                <label for="userApplicationName">User application</label>
+                <input type="text" id="userApplicationName">
+              </div>
+            </div>
+
+            <div class="protocol-block" id="dnp3Block">
+              <h3>DNP3</h3>
+              <div id="dnp3MasterFields">
+                <div class="form-group">
+                  <label for="masterId">Master ID</label>
+                  <input type="number" id="masterId" min="1">
+                </div>
+              </div>
+              <div id="dnp3SlaveFields">
+                <div class="form-group">
+                  <label for="outstationId">Outstation ID</label>
+                  <input type="number" id="outstationId" min="1">
+                </div>
+                <div class="form-group">
+                  <label for="analogInputs">Analog inputs (JSON)</label>
+                  <textarea id="analogInputs" rows="3" placeholder="{&quot;0&quot;:{&quot;value&quot;:12}}"></textarea>
+                </div>
+                <div class="form-group">
+                  <label for="binaryInputs">Binary inputs (JSON)</label>
+                  <textarea id="binaryInputs" rows="3" placeholder="{&quot;0&quot;:{&quot;value&quot;:1}}"></textarea>
+                </div>
+                <div class="form-group">
+                  <label for="analogOutputStatus">Analog output status (JSON)</label>
+                  <textarea id="analogOutputStatus" rows="3" placeholder="{&quot;0&quot;:{&quot;value&quot;:12}}"></textarea>
+                </div>
+                <div class="form-group">
+                  <label for="binaryOutputStatus">Binary output status (JSON)</label>
+                  <textarea id="binaryOutputStatus" rows="3" placeholder="{&quot;0&quot;:{&quot;value&quot;:1}}"></textarea>
+                </div>
+                <div class="form-group checkbox-row">
+                  <input type="checkbox" id="dnp3Simulation">
+                  <label for="dnp3Simulation">Habilitar simulación periódica</label>
+                </div>
+                <div class="form-group">
+                  <label for="dnp3Interval">Intervalo (ms)</label>
+                  <input type="number" id="dnp3Interval" min="100">
+                </div>
+              </div>
+            </div>
+
+            <div class="protocol-block" id="iec104Block">
+              <h3>IEC 104</h3>
+              <div class="form-group">
+                <label for="commonAddress">Common address</label>
+                <input type="number" id="commonAddress" min="1">
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="tickRateMs">Tick rate (ms)</label>
+                  <input type="number" id="tickRateMs" min="10">
+                </div>
+                <div class="form-group">
+                  <label for="selectTimeoutMs">Select timeout (ms)</label>
+                  <input type="number" id="selectTimeoutMs" min="100">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="maxConnections">Max connections</label>
+                  <input type="number" id="maxConnections" min="1">
+                </div>
+                <div class="form-group">
+                  <label for="authorizedMasters">Masters autorizados</label>
+                  <input type="text" id="authorizedMasters" placeholder="1,2,3">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="iecK">K</label>
+                  <input type="number" id="iecK" min="1">
+                </div>
+                <div class="form-group">
+                  <label for="iecW">W</label>
+                  <input type="number" id="iecW" min="1">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="iecT1">T1</label>
+                  <input type="number" id="iecT1" min="1">
+                </div>
+                <div class="form-group">
+                  <label for="iecT2">T2</label>
+                  <input type="number" id="iecT2" min="1">
+                </div>
+                <div class="form-group">
+                  <label for="iecT3">T3</label>
+                  <input type="number" id="iecT3" min="1">
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="iecSinglePoints">Single points (JSON)</label>
+                <textarea id="iecSinglePoints" rows="3" placeholder="{&quot;0&quot;:{&quot;ioa&quot;:1,&quot;value&quot;:1,&quot;report_ms&quot;:1000}}"></textarea>
+              </div>
+              <div class="form-group">
+                <label for="iecMeasuredShort">Measured short (JSON)</label>
+                <textarea id="iecMeasuredShort" rows="3" placeholder="{&quot;0&quot;:{&quot;ioa&quot;:1,&quot;value&quot;:12.5,&quot;report_ms&quot;:1000}}"></textarea>
+              </div>
+            </div>
+
+            <div class="form-actions">
+              <button type="button" class="button button-secondary" id="cancelNode">Cancelar</button>
+              <button type="submit" class="button button-primary">Guardar nodo</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel hidden" id="attacksPanel">
+          <div class="panel-title-row">
+            <h2>Escenario de ataques</h2>
+            <div class="panel-actions">
+              <button type="button" class="button button-secondary" id="expandAttacks">Expandir todo</button>
+              <button type="button" class="button button-secondary" id="collapseAttacks">Colapsar todo</button>
+            </div>
           </div>
-          <div class="form-row single-line">
-              <label for="discrete_inputs">Values</label>
-              <input type="text" id="discrete_inputs" name="discrete_inputs" 
-                    placeholder="0,1,0,0,1">
+          <p class="hint">Selecciona técnicas MITRE ATT&CK for ICS para simular tráfico malicioso desde este master.</p>
+          <div class="form-group">
+            <label for="attacksMasterSelect">Master objetivo</label>
+            <select id="attacksMasterSelect"></select>
           </div>
-          <div class="form-row separator"></div>
-          
-          <!-- Coils -->
-          <div class="form-row header">
-              <label>Coils</label>
+          <div id="attacksList"></div>
+          <div class="form-actions">
+            <button type="button" class="button button-primary" id="saveAttacks">Guardar ataques</button>
           </div>
-          <div class="form-row single-line">
-              <label for="coils_type">Type</label>
-              <select id="coils_type" name="coils_type">
-                  <option value="sequential">Sequential</option>
-                  <option value="sparse">Sparse</option>
-              </select>
+        </section>
+
+        <section class="panel hidden" id="edgePanel">
+          <h2>Mensajes del master</h2>
+          <div class="edge-summary">
+            <div>
+              <span class="label">Master</span>
+              <span id="edgeSource">-</span>
+            </div>
+            <div>
+              <span class="label">Slave</span>
+              <span id="edgeTarget">-</span>
+            </div>
           </div>
-          <div class="form-row single-line">
-              <label for="coils">Values</label>
-              <input type="text" id="coils" name="coils" placeholder="0,1,0,0,1">
+          <p class="hint">Los mensajes se enviarán desde el master al slave seleccionado.</p>
+          <div id="messagesContainer"></div>
+          <div class="form-actions">
+            <button type="button" class="button button-secondary" id="addMessage">+ Mensaje</button>
+            <button type="button" class="button button-primary" id="saveEdge">Guardar enlace</button>
           </div>
-          <div class="form-row separator"></div>
-          
-          <!-- Input Registers -->
-          <div class="form-row header">
-              <label>Input Registers</label>
-          </div>
-          <div class="form-row single-line">
-              <label for="input_registers_type">Type</label>
-              <select id="input_registers_type" name="input_registers_type">
-                  <option value="sequential">Sequential</option>
-                  <option value="sparse">Sparse</option>
-              </select>
-          </div>
-          <div class="form-row single-line">
-              <label for="input_registers">Values</label>
-              <input type="text" id="input_registers" name="input_registers" 
-                    placeholder="0,1,2,3,4">
-          </div>
-          <div class="form-row separator"></div>
-          
-          <!-- Holding Registers -->
-          <div class="form-row header">
-              <label>Holding Registers</label>
-          </div>
-          <div class="form-row single-line">
-              <label for="holding_registers_type">Type</label>
-              <select id="holding_registers_type" name="holding_registers_type">
-                  <option value="sequential">Sequential</option>
-                  <option value="sparse">Sparse</option>
-              </select>
-          </div>
-          <div class="form-row single-line">
-              <label for="holding_registers">Values</label>
-              <input type="text" id="holding_registers" name="holding_registers" 
-                    placeholder="0,1,2,3,4">
-          </div>
-      </form>
-  </div>
+        </section>
+      </aside>
 
-
-  <!-- Identity config -->
-  <div id="identityPanel" style="display: none" , class="configPopup">
-    <form>
-      <div class="form-row">
-        <label for="vendor_name" class="input-field">Vendor Name</label>
-        <input type="text" id="vendor_name" name="vendor_name" placeholder="ModbusDeviceCo" class="input-field">
-      </div>
-
-      <div class="form-row">
-        <label for="product_code" class="input-field">Product Code</label>
-        <input type="text" id="product_code" name="product_code" placeholder="MDX-1000" class="input-field">
-      </div>
-
-      <div class="form-row">
-        <label for="major_minor_revision" class="input-field">Major Minor Revision</label>
-        <input type="text" id="major_minor_revision" name="major_minor_revision" placeholder="1.5" class="input-field">
-      </div>
-
-      <div class="form-row">
-        <label for="vendor_url" class="input-field">Vendor Url</label>
-        <input type="text" id="vendor_url" name="vendor_url" placeholder="http://www.modbusdeviceco.com"
-          class="input-field">
-      </div>
-
-      <div class="form-row">
-        <label for="product_name" class="input-field">Product Name</label>
-        <input type="text" id="product_name" name="product_name" placeholder="Modbus Advanced Device"
-          class="input-field">
-      </div>
-
-      <div class="form-row">
-        <label for="model_name" class="input-field">Model Name</label>
-        <input type="text" id="model_name" name="model_name" placeholder="MDX-1000 Standard" class="input-field">
-      </div>
-
-      <div class="form-row">
-        <label for="user_application_name" class="input-field">User Application Name</label>
-        <input type="text" id="user_application_name" name="user_application_name"
-          placeholder="Temperature Control Unit" class="input-field">
-      </div>
-    </form>
-  </div>
-
-  <!-- Edge config -->
-  <div id="edgeConfigPopup" class="configPopup">
-      <h3 id="edgeConfigDirection"></h3>
-      <div id="messages-container"></div>
-  </div>
-
-  <div id="run_overlay" style="display: none;">
-    <div id="run_overlay_content" class="configRun">
-      <h2>Running...</h2>
-
-      <div class="form-row single-line">
-        <p>Remaining: </p>
-        <p id="time_progress">-</p>
-      </div>
-
-      <div class="form-row single-line">
-        <p>Progress: </p>
-        <p id="percentage_progress">-</p>
-      </div>
-
-      <div class="form-row single-line">
-        <p>Pcap Size (bytes): </p>
-        <p id="pcap_size">-</p>
-      </div>
-
-      <!-- <p id="remaining_time"></p> -->
-      <button id="stop_button" onclick="stop()">Stop</button>
+      <main class="graph-panel">
+        <div id="cy"></div>
+        <div class="empty-state" id="emptyState">
+          <h3>Empieza creando un nodo</h3>
+          <p>Usa el botón “➕ Nodo” o haz click sobre el lienzo.</p>
+        </div>
+      </main>
     </div>
   </div>
 
-  <div id="run_settings" class="configPopup" style="display: none;">
-    <div id="run_settings_content" class="configRun">
-      <h2>Scenario Configuration</h2>
-      <div class="form-row single-line">
-        <label for="simulation_time">Emulation Time (s)</label>
-        <input type="text" id="simulation_time" name="simulation_time" placeholder="60">
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <div class="modal" id="runModal" aria-hidden="true">
+    <div class="modal-card">
+      <h2>Ejecutar simulación</h2>
+      <label for="simulationTime">Tiempo de simulación (s)</label>
+      <input type="number" id="simulationTime" min="1" value="60">
+      <div class="form-actions">
+        <button class="button button-secondary" id="cancelRun">Cancelar</button>
+        <button class="button button-success" id="confirmRun">Ejecutar</button>
       </div>
-      <button id="cancel_button" onclick="cancelRun()">Cancel</button>
-      <button id="run_button" onclick="executeRun()">Emulate</button>
     </div>
   </div>
 
-  <div id="cy" style="width: 100%; height: 100vh;"></div>
+  <div class="modal" id="runOverlay" aria-hidden="true">
+    <div class="modal-card">
+      <h2>Simulación en curso</h2>
+      <div class="progress-info">
+        <span>Tiempo:</span>
+        <span id="progressTime">0</span>
+      </div>
+      <div class="progress-info">
+        <span>Progreso:</span>
+        <span id="progressPercent">0%</span>
+      </div>
+      <div class="progress-info">
+        <span>PCAP:</span>
+        <span id="progressPcap">0 KB</span>
+      </div>
+      <button class="button button-danger" id="stopRun">Detener</button>
+    </div>
+  </div>
+
   <script>
-    var networkData = {{.NetworkData | toJSON}};
+    const networkData = {{ toJSON .NetworkData }};
   </script>
-  <script src="/static/js/constants.js"></script>
-  <script src="/static/js/dom-manager.js"></script>
-  <script src="/static/js/state-manager.js"></script>
-  <script src="/static/js/validators.js"></script>
-  <script src="/static/js/ip-manager.js"></script>
-  <script src="/static/js/ui-utils.js"></script>
-  <script src="/static/js/popup-tracker.js"></script>
-  <script src="/static/js/messages-ui.js"></script>
-  <script src="/static/js/node-manager.js"></script>
-  <script src="/static/js/edge-manager.js"></script>
-  <script src="/static/js/event-handlers.js"></script>
-  <script src="/static/js/api-transformer.js"></script>
-  <script src="/static/js/client-validator.js"></script>
-  <script src="/static/js/main.js"></script>
+  <script type="module" src="/static/js/network.js"></script>
 </body>
-
 </html>

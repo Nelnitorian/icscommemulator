@@ -1,45 +1,27 @@
-# Build stage
-FROM ubuntu:22.04 AS build
+FROM python:3.11-slim AS build
 
-WORKDIR /app
+WORKDIR /build
 
-# Install dependencies
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
     git \
     libssl-dev \
+    libasio-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Clone and build opendnp3
-RUN git clone --recursive https://github.com/dnp3/opendnp3.git && \
-    cd opendnp3 && \
-    mkdir build && \
-    cd build && \
-    cmake .. -DCMAKE_BUILD_TYPE=Release -DDNP3_ALL=ON -DCMAKE_INSTALL_PREFIX=/usr/local && \
-    make -j$(nproc) && \
-    make install && \
-    ldconfig
+COPY lib/dnp3-python /build/lib/dnp3-python
+RUN python -m venv /opt/venv \
+    && /opt/venv/bin/pip install --no-cache-dir /build/lib/dnp3-python pyyaml
 
-# Copy source and build application
-COPY main.cpp ./
-RUN g++ -std=c++14 -O2 -o dnp3_master main.cpp \
-    -lopendnp3 -lasiodnp3 -lasiopal -pthread \
-    -I/usr/local/include \
-    -L/usr/local/lib
+FROM python:3.11-slim
 
-# Final stage
-FROM ubuntu:22.04
-
-RUN apt-get update && apt-get install -y \
-    libssl3 \
-    && rm -rf /var/lib/apt/lists/*
+ENV PYTHONUNBUFFERED=1
+ENV PATH="/opt/venv/bin:$PATH"
 
 WORKDIR /app
 
-# Copy compiled binary and libraries
-COPY --from=build /usr/local/lib/lib*.so* /usr/local/lib/
-COPY --from=build /app/dnp3_master ./
-RUN ldconfig
+COPY --from=build /opt/venv /opt/venv
+COPY protocols/dnp3/master/master.py /app/master.py
 
-CMD ["./dnp3_master"]
+ENTRYPOINT ["python", "/app/master.py"]

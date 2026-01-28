@@ -10,24 +10,19 @@ RUN apk add --no-cache git
 COPY main.go ./
 RUN go mod init modbus-master && \
     go get github.com/goburrow/modbus@v0.1.0 && \
-    go get github.com/sirupsen/logrus@v1.9.3
+    go get github.com/sirupsen/logrus@v1.9.3 && \
+    go get gopkg.in/yaml.v3@v3.0.1
 
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o master ./main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o master ./main.go
 
-# Final stage
-FROM alpine:latest
-
-# Add ca-certificates for HTTPS requests (if needed)
-RUN apk --no-cache add ca-certificates tzdata
+# Final stage (static binary)
+FROM scratch
 
 WORKDIR /app
 
 # Copy the binary from build stage
-COPY --from=build /app/master ./master
-
-# Make sure the binary is executable
-RUN chmod +x ./master
+COPY --from=build /app/master /app/master
 
 # Run the master application
-ENTRYPOINT ["./master"]
+ENTRYPOINT ["/app/master"]

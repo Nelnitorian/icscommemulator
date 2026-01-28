@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"regexp"
@@ -25,49 +26,62 @@ const (
 	IEC104 Protocol = "iec104"
 )
 
-// NodeData represents a network node with protocol-specific configurations
+type DNP3Point struct {
+	Value interface{} `json:"value" yaml:"value"`
+	Flags int         `json:"flags,omitempty" yaml:"flags,omitempty"`
+}
+
+type IEC104Point struct {
+	IOA      int         `json:"ioa" yaml:"ioa"`
+	Value    interface{} `json:"value" yaml:"value"`
+	ReportMS int         `json:"report_ms" yaml:"report_ms"`
+}
+
 type NodeData struct {
-	ID       string      `json:"id" yaml:"id"`
-	Label    string      `json:"label,omitempty" yaml:"label,omitempty"`
-	Role     string      `json:"role" yaml:"role"`
-	Name     string      `json:"name" yaml:"name"`
-	IP       string      `json:"ip" yaml:"ip"`
-	Port     interface{} `json:"port,omitempty" yaml:"port,omitempty"`
-	SlaveID  interface{} `json:"slave_id,omitempty" yaml:"slave_id,omitempty"`
-	Comment  string      `json:"comment,omitempty" yaml:"comment,omitempty"`
-	Messages []Message   `json:"messages,omitempty" yaml:"messages,omitempty"`
+	ID    string      `json:"id" yaml:"id"`
+	Label string      `json:"label,omitempty" yaml:"label,omitempty"`
+	Role  string      `json:"role" yaml:"role"`
+	Name  string      `json:"name" yaml:"name"`
+	IP    string      `json:"ip" yaml:"ip"`
+	Port  interface{} `json:"port,omitempty" yaml:"port,omitempty"`
 
-	// MODBUS specific
-	HoldingRegisters RegisterConfig `json:"holding_registers,omitempty" yaml:"holding_registers,omitempty"`
-	Coils            RegisterConfig `json:"coils,omitempty" yaml:"coils,omitempty"`
-	DiscreteInputs   RegisterConfig `json:"discrete_inputs,omitempty" yaml:"discrete_inputs,omitempty"`
-	InputRegisters   RegisterConfig `json:"input_registers,omitempty" yaml:"input_registers,omitempty"`
+	TickRateMS        int   `json:"tick_rate_ms,omitempty" yaml:"tick_rate_ms,omitempty"`
+	SelectTimeoutMS   int   `json:"select_timeout_ms,omitempty" yaml:"select_timeout_ms,omitempty"`
+	MaxConnections    int   `json:"max_connections,omitempty" yaml:"max_connections,omitempty"`
+	AuthorizedMasters []int `json:"authorized_masters,omitempty" yaml:"authorized_masters,omitempty"`
 
-	// DNP3 specific
-	OutstationID       interface{}            `json:"outstation_id,omitempty" yaml:"outstation_id,omitempty"`
-	MasterID           interface{}            `json:"master_id,omitempty" yaml:"master_id,omitempty"`
-	AnalogInputs       *DNP3PointConfig       `json:"analog_inputs,omitempty" yaml:"analog_inputs,omitempty"`
-	BinaryInputs       *DNP3PointConfig       `json:"binary_inputs,omitempty" yaml:"binary_inputs,omitempty"`
-	AnalogOutputStatus *DNP3PointConfig       `json:"analog_output_status,omitempty" yaml:"analog_output_status,omitempty"`
-	BinaryOutputStatus *DNP3PointConfig       `json:"binary_output_status,omitempty" yaml:"binary_output_status,omitempty"`
-	Simulation         *SimulationConfig      `json:"simulation,omitempty" yaml:"simulation,omitempty"`
+	SlaveID  interface{}    `json:"slave_id,omitempty" yaml:"slave_id,omitempty"`
+	Comment  string         `json:"comment,omitempty" yaml:"comment,omitempty"`
+	Messages []Message      `json:"messages,omitempty" yaml:"messages,omitempty"`
+	Attacks  []AttackConfig `json:"attacks,omitempty" yaml:"attacks,omitempty"`
 
-	// IEC104 specific
+	HoldingRegisters map[string]int `json:"holding_registers,omitempty" yaml:"holding_registers,omitempty"`
+	Coils            map[string]int `json:"coils,omitempty" yaml:"coils,omitempty"`
+	DiscreteInputs   map[string]int `json:"discrete_inputs,omitempty" yaml:"discrete_inputs,omitempty"`
+	InputRegisters   map[string]int `json:"input_registers,omitempty" yaml:"input_registers,omitempty"`
+
+	OutstationID       interface{}          `json:"outstation_id,omitempty" yaml:"outstation_id,omitempty"`
+	MasterID           interface{}          `json:"master_id,omitempty" yaml:"master_id,omitempty"`
+	AnalogInputs       map[string]DNP3Point `json:"analog_inputs,omitempty" yaml:"analog_inputs,omitempty"`
+	BinaryInputs       map[string]DNP3Point `json:"binary_inputs,omitempty" yaml:"binary_inputs,omitempty"`
+	AnalogOutputStatus map[string]DNP3Point `json:"analog_output_status,omitempty" yaml:"analog_output_status,omitempty"`
+	BinaryOutputStatus map[string]DNP3Point `json:"binary_output_status,omitempty" yaml:"binary_output_status,omitempty"`
+	Simulation         *SimulationConfig    `json:"simulation,omitempty" yaml:"simulation,omitempty"`
+
 	CommonAddress      interface{}            `json:"common_address,omitempty" yaml:"common_address,omitempty"`
 	T1                 interface{}            `json:"t1,omitempty" yaml:"t1,omitempty"`
 	T2                 interface{}            `json:"t2,omitempty" yaml:"t2,omitempty"`
 	T3                 interface{}            `json:"t3,omitempty" yaml:"t3,omitempty"`
 	K                  interface{}            `json:"k,omitempty" yaml:"k,omitempty"`
 	W                  interface{}            `json:"w,omitempty" yaml:"w,omitempty"`
-	SinglePoints       *IEC104PointConfig     `json:"single_points,omitempty" yaml:"single_points,omitempty"`
-	DoublePoints       *IEC104PointConfig     `json:"double_points,omitempty" yaml:"double_points,omitempty"`
-	MeasuredScaled     *IEC104PointConfig     `json:"measured_scaled,omitempty" yaml:"measured_scaled,omitempty"`
-	MeasuredNormalized *IEC104PointConfig     `json:"measured_normalized,omitempty" yaml:"measured_normalized,omitempty"`
+	SinglePoints       map[string]IEC104Point `json:"single_points,omitempty" yaml:"single_points,omitempty"`
+	DoublePoints       map[string]IEC104Point `json:"double_points,omitempty" yaml:"double_points,omitempty"`
+	MeasuredScaled     map[string]IEC104Point `json:"measured_scaled,omitempty" yaml:"measured_scaled,omitempty"`
+	MeasuredNormalized map[string]IEC104Point `json:"measured_normalized,omitempty" yaml:"measured_normalized,omitempty"`
+	MeasuredShort      map[string]IEC104Point `json:"measured_short,omitempty" yaml:"measured_short,omitempty"`
 
-	// Common identity
 	Identity map[string]interface{} `json:"identity,omitempty" yaml:"identity,omitempty"`
 
-	// Cytoscape specific (not included in YAML)
 	Position   *Position `json:"position,omitempty" yaml:"-"`
 	Group      string    `json:"group,omitempty" yaml:"-"`
 	Removed    bool      `json:"removed,omitempty" yaml:"-"`
@@ -84,34 +98,15 @@ type Position struct {
 	Y float64 `json:"y"`
 }
 
-type RegisterConfig struct {
-	Type   string      `json:"type,omitempty" yaml:"type,omitempty"`
-	Values interface{} `json:"values,omitempty" yaml:"values,omitempty"`
-}
-
-// DNP3 specific types
-type DNP3PointConfig struct {
-	Count         int                      `json:"count" yaml:"count"`
-	InitialValues []map[string]interface{} `json:"initial_values,omitempty" yaml:"initial_values,omitempty"`
-}
-
 type SimulationConfig struct {
-	Enabled bool `json:"enabled" yaml:"enabled"`
-	Interval int `json:"interval,omitempty" yaml:"interval,omitempty"`
-}
-
-// IEC104 specific types
-type IEC104PointConfig struct {
-	Type     string      `json:"type" yaml:"type"`
-	StartIOA int         `json:"start_ioa" yaml:"start_ioa"`
-	Values   interface{} `json:"values" yaml:"values"`
-	TypeID   string      `json:"type_id" yaml:"type_id"`
+	Enabled  bool `json:"enabled" yaml:"enabled"`
+	Interval int  `json:"interval,omitempty" yaml:"interval,omitempty"`
 }
 
 type Node struct {
-	Data    NodeData `json:"data" yaml:"data"`
-	Classes string   `json:"classes,omitempty" yaml:"classes,omitempty"`
-	Position *Position `json:"position,omitempty" yaml:"-"`
+	Data     NodeData    `json:"data" yaml:"data"`
+	Classes  NodeClasses `json:"classes,omitempty" yaml:"classes,omitempty"`
+	Position *Position   `json:"position,omitempty" yaml:"-"`
 }
 
 type EdgeData struct {
@@ -130,31 +125,29 @@ type Edge struct {
 }
 
 type Message struct {
-	Timestamp    int         `json:"timestamp" yaml:"timestamp"`
-	Recurrent    bool        `json:"recurrent" yaml:"recurrent"`
-	Interval     *int        `json:"interval,omitempty" yaml:"interval,omitempty"`
-	IP           string      `json:"ip" yaml:"ip"`
-	Port         int         `json:"port" yaml:"port"`
-	SlaveID      int         `json:"slave_id,omitempty" yaml:"slave_id,omitempty"`
-	FunctionCode int         `json:"function_code,omitempty" yaml:"function_code,omitempty"`
-	StartAddress interface{}         `json:"start_address,omitempty" yaml:"start_address,omitempty"`
-	Count        int         `json:"count,omitempty" yaml:"count,omitempty"`
+	Timestamp    int           `json:"timestamp" yaml:"timestamp"`
+	Recurrent    bool          `json:"recurrent" yaml:"recurrent"`
+	Interval     *int          `json:"interval,omitempty" yaml:"interval,omitempty"`
+	IP           string        `json:"ip" yaml:"ip"`
+	Port         int           `json:"port" yaml:"port"`
+	SlaveID      int           `json:"slave_id,omitempty" yaml:"slave_id,omitempty"`
+	FunctionCode int           `json:"function_code,omitempty" yaml:"function_code,omitempty"`
+	StartAddress interface{}   `json:"start_address,omitempty" yaml:"start_address,omitempty"`
+	Count        int           `json:"count,omitempty" yaml:"count,omitempty"`
 	Values       []interface{} `json:"values,omitempty" yaml:"values,omitempty"`
 
-	// DNP3 specific
-	OperationType  string `json:"operation_type,omitempty" yaml:"operation_type,omitempty"`
-	Group          int    `json:"group,omitempty" yaml:"group,omitempty"`
-	Variation      int    `json:"variation,omitempty" yaml:"variation,omitempty"`
-	Index          int    `json:"index,omitempty" yaml:"index,omitempty"`
-	MasterID       int    `json:"master_id,omitempty" yaml:"master_id,omitempty"`
-	OutstationID   int    `json:"outstation_id,omitempty" yaml:"outstation_id,omitempty"`
-	Value          string `json:"value,omitempty" yaml:"value,omitempty"`
+	OperationType string `json:"operation_type,omitempty" yaml:"operation_type,omitempty"`
+	Group         int    `json:"group,omitempty" yaml:"group,omitempty"`
+	Variation     int    `json:"variation,omitempty" yaml:"variation,omitempty"`
+	Index         int    `json:"index,omitempty" yaml:"index,omitempty"`
+	MasterID      int    `json:"master_id,omitempty" yaml:"master_id,omitempty"`
+	OutstationID  int    `json:"outstation_id,omitempty" yaml:"outstation_id,omitempty"`
+	Value         string `json:"value,omitempty" yaml:"value,omitempty"`
 
-	// IEC104 specific
-	TypeID        int    `json:"type_id,omitempty" yaml:"type_id,omitempty"`
-	CommonAddress int    `json:"common_address,omitempty" yaml:"common_address,omitempty"`
-	IOA           int    `json:"ioa,omitempty" yaml:"ioa,omitempty"`
-	COT           int    `json:"cot,omitempty" yaml:"cot,omitempty"`
+	TypeID        int `json:"type_id,omitempty" yaml:"type_id,omitempty"`
+	CommonAddress int `json:"common_address,omitempty" yaml:"common_address,omitempty"`
+	IOA           int `json:"ioa,omitempty" yaml:"ioa,omitempty"`
+	COT           int `json:"cot,omitempty" yaml:"cot,omitempty"`
 }
 
 type CytoscapeData struct {
@@ -164,20 +157,49 @@ type CytoscapeData struct {
 	Edges     []Edge `json:"edges" yaml:"edges"`
 }
 
+type NodeClasses string
+
+func (c *NodeClasses) UnmarshalJSON(data []byte) error {
+	var asString string
+	if err := json.Unmarshal(data, &asString); err == nil {
+		*c = NodeClasses(asString)
+		return nil
+	}
+
+	var asArray []string
+	if err := json.Unmarshal(data, &asArray); err == nil {
+		*c = NodeClasses(strings.Join(asArray, " "))
+		return nil
+	}
+
+	var asAny []interface{}
+	if err := json.Unmarshal(data, &asAny); err == nil {
+		values := make([]string, 0, len(asAny))
+		for _, item := range asAny {
+			if str, ok := item.(string); ok {
+				values = append(values, str)
+			}
+		}
+		*c = NodeClasses(strings.Join(values, " "))
+		return nil
+	}
+
+	return fmt.Errorf("invalid classes value: %s", string(data))
+}
+
 type YAMLData struct {
 	Protocol  string     `yaml:"protocol"`
 	IPNetwork string     `yaml:"ip_network"`
 	Nodes     []NodeData `yaml:"nodes"`
 }
 
-// ValidateCytoscapeScenario validates a cytoscape scenario based on the given level
 func ValidateCytoscapeScenario(data CytoscapeData, level Level) []string {
 	var logs []string
 
 	if level >= ERROR {
-		// Check if all IDs are different
 		nodeIDs := make([]string, len(data.Nodes))
 		idCount := make(map[string]int)
+
 		for i, node := range data.Nodes {
 			nodeIDs[i] = node.Data.ID
 			idCount[node.Data.ID]++
@@ -189,11 +211,11 @@ func ValidateCytoscapeScenario(data CytoscapeData, level Level) []string {
 				duplicates = append(duplicates, id)
 			}
 		}
+
 		if len(duplicates) > 0 {
 			logs = append(logs, fmt.Sprintf("[ERROR] All node IDs are not unique. Duplicates: %v", duplicates))
 		}
 
-		// Check if edges connect nodes with different roles
 		nodeRoles := make(map[string]string)
 		for _, node := range data.Nodes {
 			nodeRoles[node.Data.ID] = node.Data.Role
@@ -202,12 +224,12 @@ func ValidateCytoscapeScenario(data CytoscapeData, level Level) []string {
 		for _, edge := range data.Edges {
 			sourceRole := nodeRoles[edge.Data.Source]
 			targetRole := nodeRoles[edge.Data.Target]
+
 			if sourceRole == targetRole {
 				logs = append(logs, fmt.Sprintf("[ERROR] Edge %s connects nodes with the same role (%s)", edge.Data.ID, sourceRole))
 			}
 		}
 
-		// Check if IPs are within range
 		_, ipNet, err := net.ParseCIDR(data.IPNetwork)
 		if err != nil {
 			logs = append(logs, fmt.Sprintf("[ERROR] Invalid IP network: %s", data.IPNetwork))
@@ -224,7 +246,6 @@ func ValidateCytoscapeScenario(data CytoscapeData, level Level) []string {
 	}
 
 	if level >= WARNING {
-		// Protocol-specific validation
 		switch Protocol(data.Protocol) {
 		case MODBUS:
 			logs = append(logs, validateModbusNodes(data.Nodes)...)
@@ -234,7 +255,6 @@ func ValidateCytoscapeScenario(data CytoscapeData, level Level) []string {
 			logs = append(logs, validateIEC104Nodes(data.Nodes)...)
 		}
 
-		// Find nodes without links
 		linkedNodeIDs := make(map[string]bool)
 		for _, edge := range data.Edges {
 			linkedNodeIDs[edge.Data.Source] = true
@@ -255,13 +275,10 @@ func validateModbusNodes(nodes []Node) []string {
 	var logs []string
 	for _, node := range nodes {
 		if node.Data.Role == "slave" {
-			hasRegisters := false
-			if hasValues(node.Data.HoldingRegisters.Values) ||
-				hasValues(node.Data.Coils.Values) ||
-				hasValues(node.Data.DiscreteInputs.Values) ||
-				hasValues(node.Data.InputRegisters.Values) {
-				hasRegisters = true
-			}
+			hasRegisters := len(node.Data.HoldingRegisters) > 0 ||
+				len(node.Data.Coils) > 0 ||
+				len(node.Data.DiscreteInputs) > 0 ||
+				len(node.Data.InputRegisters) > 0
 			if !hasRegisters {
 				logs = append(logs, fmt.Sprintf("[WARNING] Modbus slave node %s has no defined registers", node.Data.ID))
 			}
@@ -280,7 +297,8 @@ func validateDNP3Nodes(nodes []Node) []string {
 			if node.Data.MasterID == nil {
 				logs = append(logs, fmt.Sprintf("[WARNING] DNP3 slave node %s missing master_id", node.Data.ID))
 			}
-			if node.Data.AnalogInputs == nil && node.Data.BinaryInputs == nil {
+
+			if len(node.Data.AnalogInputs) == 0 && len(node.Data.BinaryInputs) == 0 {
 				logs = append(logs, fmt.Sprintf("[WARNING] DNP3 slave node %s has no inputs configured", node.Data.ID))
 			}
 		}
@@ -295,28 +313,19 @@ func validateIEC104Nodes(nodes []Node) []string {
 			if node.Data.CommonAddress == nil {
 				logs = append(logs, fmt.Sprintf("[WARNING] IEC104 slave node %s missing common_address", node.Data.ID))
 			}
-			hasPoints := node.Data.SinglePoints != nil ||
-				node.Data.DoublePoints != nil ||
-				node.Data.MeasuredScaled != nil ||
-				node.Data.MeasuredNormalized != nil
+
+			hasPoints := len(node.Data.SinglePoints) > 0 ||
+				len(node.Data.DoublePoints) > 0 ||
+				len(node.Data.MeasuredScaled) > 0 ||
+				len(node.Data.MeasuredNormalized) > 0 ||
+				len(node.Data.MeasuredShort) > 0
+
 			if !hasPoints {
 				logs = append(logs, fmt.Sprintf("[WARNING] IEC104 slave node %s has no points configured", node.Data.ID))
 			}
 		}
 	}
 	return logs
-}
-
-func hasValues(values interface{}) bool {
-	if values == nil {
-		return false
-	}
-
-	if str, ok := values.(string); ok {
-		return strings.TrimSpace(str) != ""
-	}
-
-	return true
 }
 
 // CleanDictValues cleans dictionary values by removing illegal characters
@@ -342,7 +351,6 @@ func ParseCytoscapeJSON(data CytoscapeData) (string, error) {
 		Nodes:     []NodeData{},
 	}
 
-	// Create messages dictionary for master nodes
 	messagesDict := make(map[string][]Message)
 	for _, node := range data.Nodes {
 		if node.Data.Role == "master" {
@@ -350,7 +358,6 @@ func ParseCytoscapeJSON(data CytoscapeData) (string, error) {
 		}
 	}
 
-	// Parse edges to generate messages for master nodes
 	for _, edge := range data.Edges {
 		targetNode := findFirstMatchingNode(data.Nodes, edge.Data.Target)
 		if targetNode == nil {
@@ -358,8 +365,7 @@ func ParseCytoscapeJSON(data CytoscapeData) (string, error) {
 		}
 
 		for _, message := range edge.Data.Messages {
-			// Convert port to integer
-			port := 502 // default for modbus
+			port := 502
 			if Protocol(data.Protocol) == DNP3 {
 				port = 20000
 			} else if Protocol(data.Protocol) == IEC104 {
@@ -382,7 +388,6 @@ func ParseCytoscapeJSON(data CytoscapeData) (string, error) {
 				Port:      port,
 			}
 
-			// Protocol-specific fields
 			switch Protocol(data.Protocol) {
 			case MODBUS:
 				slaveID := 1
@@ -397,7 +402,6 @@ func ParseCytoscapeJSON(data CytoscapeData) (string, error) {
 				msg.FunctionCode = message.FunctionCode
 				msg.Count = message.Count
 				msg.Values = message.Values
-
 				if message.StartAddress != nil {
 					addr, err := parseAddressValue(message.StartAddress)
 					if err != nil {
@@ -414,7 +418,6 @@ func ParseCytoscapeJSON(data CytoscapeData) (string, error) {
 				msg.MasterID = message.MasterID
 				msg.OutstationID = message.OutstationID
 				msg.Value = message.Value
-
 			case IEC104:
 				msg.TypeID = message.TypeID
 				msg.CommonAddress = message.CommonAddress
@@ -427,23 +430,19 @@ func ParseCytoscapeJSON(data CytoscapeData) (string, error) {
 		}
 	}
 
-	// Add nodes to yamlData
 	for _, node := range data.Nodes {
 		nodeData := node.Data
 		if nodeData.Role == "master" {
 			nodeData.Messages = messagesDict[nodeData.ID]
 		}
 
-		// Clean data
 		if nodeData.Role == "slave" {
-			// Convert port and slave_id to integers if they are strings
 			if port, ok := nodeData.Port.(string); ok {
 				if p, err := parseIntFromString(port); err == nil {
 					nodeData.Port = p
 				}
 			}
 
-			// Protocol-specific conversions
 			switch Protocol(data.Protocol) {
 			case MODBUS:
 				if slaveID, ok := nodeData.SlaveID.(string); ok {
@@ -451,7 +450,6 @@ func ParseCytoscapeJSON(data CytoscapeData) (string, error) {
 						nodeData.SlaveID = s
 					}
 				}
-
 			case DNP3:
 				if outstationID, ok := nodeData.OutstationID.(string); ok {
 					if o, err := parseIntFromString(outstationID); err == nil {
@@ -463,7 +461,6 @@ func ParseCytoscapeJSON(data CytoscapeData) (string, error) {
 						nodeData.MasterID = m
 					}
 				}
-
 			case IEC104:
 				if commonAddr, ok := nodeData.CommonAddress.(string); ok {
 					if c, err := parseIntFromString(commonAddr); err == nil {
@@ -471,16 +468,15 @@ func ParseCytoscapeJSON(data CytoscapeData) (string, error) {
 					}
 				}
 			}
+		}
 
-			if nodeData.Identity != nil {
-				nodeData.Identity = CleanDictValues(nodeData.Identity)
-			}
+		if nodeData.Identity != nil {
+			nodeData.Identity = CleanDictValues(nodeData.Identity)
 		}
 
 		yamlData.Nodes = append(yamlData.Nodes, nodeData)
 	}
 
-	// Convert to YAML
 	yamlOutput, err := yaml.Marshal(yamlData)
 	if err != nil {
 		return "", err
@@ -508,9 +504,9 @@ func parseIntFromString(s string) (int, error) {
 func GenerateNetworkNodes(proto Protocol, ipBase net.IP, masterNodes, slaveNodes int) ([]Node, []Edge) {
 	nodes := []Node{}
 	edges := []Edge{}
+
 	currentIP := ipBase
 
-	// Create master nodes
 	for i := 0; i < masterNodes; i++ {
 		masterNode := Node{
 			Data: NodeData{
@@ -522,12 +518,10 @@ func GenerateNetworkNodes(proto Protocol, ipBase net.IP, masterNodes, slaveNodes
 			},
 			Classes: "master",
 		}
-
 		nodes = append(nodes, masterNode)
 		currentIP = incrementIP(currentIP)
 	}
 
-	// Create slave nodes with protocol-specific configurations
 	for i := 0; i < slaveNodes; i++ {
 		data := NodeData{
 			ID:    fmt.Sprintf("slave_%d", i),
@@ -542,10 +536,11 @@ func GenerateNetworkNodes(proto Protocol, ipBase net.IP, masterNodes, slaveNodes
 			data.Port = "502"
 			data.SlaveID = "1"
 			data.Comment = ""
-			data.HoldingRegisters = RegisterConfig{Type: "sequential", Values: ""}
-			data.Coils = RegisterConfig{Type: "sequential", Values: ""}
-			data.DiscreteInputs = RegisterConfig{Type: "sequential", Values: ""}
-			data.InputRegisters = RegisterConfig{Type: "sequential", Values: ""}
+			data.HoldingRegisters = make(map[string]int)
+			data.Coils = make(map[string]int)
+			data.DiscreteInputs = make(map[string]int)
+			data.InputRegisters = make(map[string]int)
+
 			data.Identity = map[string]interface{}{
 				"major_minor_revision":  "",
 				"model_name":            "",
@@ -555,31 +550,18 @@ func GenerateNetworkNodes(proto Protocol, ipBase net.IP, masterNodes, slaveNodes
 				"vendor_name":           "",
 				"vendor_url":            "",
 			}
-
 		case DNP3:
 			data.Port = "20000"
 			data.OutstationID = "1"
 			data.MasterID = "2"
-			data.AnalogInputs = &DNP3PointConfig{
-				Count:         20,
-				InitialValues: []map[string]interface{}{},
-			}
-			data.BinaryInputs = &DNP3PointConfig{
-				Count:         20,
-				InitialValues: []map[string]interface{}{},
-			}
-			data.AnalogOutputStatus = &DNP3PointConfig{
-				Count:         10,
-				InitialValues: []map[string]interface{}{},
-			}
-			data.BinaryOutputStatus = &DNP3PointConfig{
-				Count:         10,
-				InitialValues: []map[string]interface{}{},
-			}
+			data.AnalogInputs = make(map[string]DNP3Point)
+			data.BinaryInputs = make(map[string]DNP3Point)
+			data.AnalogOutputStatus = make(map[string]DNP3Point)
+			data.BinaryOutputStatus = make(map[string]DNP3Point)
+
 			data.Simulation = &SimulationConfig{
 				Enabled: false,
 			}
-
 		case IEC104:
 			data.Port = "2404"
 			data.CommonAddress = "1"
@@ -588,30 +570,16 @@ func GenerateNetworkNodes(proto Protocol, ipBase net.IP, masterNodes, slaveNodes
 			data.T3 = 20
 			data.K = 12
 			data.W = 8
-			data.SinglePoints = &IEC104PointConfig{
-				Type:     "sequential",
-				StartIOA: 1001,
-				Values:   []int{},
-				TypeID:   "M_SP_NA_1",
-			}
-			data.DoublePoints = &IEC104PointConfig{
-				Type:     "sequential",
-				StartIOA: 5001,
-				Values:   []int{},
-				TypeID:   "M_DP_NA_1",
-			}
-			data.MeasuredScaled = &IEC104PointConfig{
-				Type:     "sequential",
-				StartIOA: 10001,
-				Values:   []int{},
-				TypeID:   "M_ME_NB_1",
-			}
-			data.MeasuredNormalized = &IEC104PointConfig{
-				Type:     "sequential",
-				StartIOA: 10101,
-				Values:   []int{},
-				TypeID:   "M_ME_NA_1",
-			}
+			data.TickRateMS = 100
+			data.SelectTimeoutMS = 10000
+			data.MaxConnections = 5
+
+			data.SinglePoints = make(map[string]IEC104Point)
+			data.DoublePoints = make(map[string]IEC104Point)
+			data.MeasuredScaled = make(map[string]IEC104Point)
+			data.MeasuredNormalized = make(map[string]IEC104Point)
+			data.MeasuredShort = make(map[string]IEC104Point)
+
 			data.Identity = map[string]interface{}{
 				"station_name": "",
 				"location":     "",
@@ -624,7 +592,6 @@ func GenerateNetworkNodes(proto Protocol, ipBase net.IP, masterNodes, slaveNodes
 			Data:    data,
 			Classes: "slave",
 		}
-
 		nodes = append(nodes, slaveNode)
 		currentIP = incrementIP(currentIP)
 	}
@@ -644,28 +611,27 @@ func incrementIP(ip net.IP) net.IP {
 	return result
 }
 
-
 func parseAddressValue(addr interface{}) (int, error) {
-    switch v := addr.(type) {
-    case int:
-        return v, nil
-    case float64:
-        return int(v), nil
-    case string:
-        v = strings.TrimSpace(v)
-        if strings.HasPrefix(strings.ToLower(v), "0x") {
-            val, err := strconv.ParseInt(v[2:], 16, 64)
-            if err != nil {
-                return 0, fmt.Errorf("invalid hex address '%s': %w", v, err)
-            }
-            return int(val), nil
-        }
-        val, err := strconv.Atoi(v)
-        if err != nil {
-            return 0, fmt.Errorf("invalid decimal address '%s': %w", v, err)
-        }
-        return val, err
-    default:
-        return 0, fmt.Errorf("invalid address type: %T", addr)
-    }
+	switch v := addr.(type) {
+	case int:
+		return v, nil
+	case float64:
+		return int(v), nil
+	case string:
+		v = strings.TrimSpace(v)
+		if strings.HasPrefix(strings.ToLower(v), "0x") {
+			val, err := strconv.ParseInt(v[2:], 16, 64)
+			if err != nil {
+				return 0, fmt.Errorf("invalid hex address '%s': %w", v, err)
+			}
+			return int(val), nil
+		}
+		val, err := strconv.Atoi(v)
+		if err != nil {
+			return 0, fmt.Errorf("invalid decimal address '%s': %w", v, err)
+		}
+		return val, nil
+	default:
+		return 0, fmt.Errorf("invalid address type: %T", addr)
+	}
 }

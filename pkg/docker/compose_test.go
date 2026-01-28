@@ -49,7 +49,7 @@ func TestAddMasterService(t *testing.T) {
 	gen := NewGenerator("/tmp/config", "modbus")
 	gen.AddNetwork("ics_network", "192.168.1.0/24")
 
-	err := gen.AddMasterService(0, "192.168.1.10", "ics_network")
+	err := gen.AddMasterService(0, "192.168.1.10", "ics_network", nil)
 	if err != nil {
 		t.Fatalf("AddMasterService() error = %v", err)
 	}
@@ -134,7 +134,7 @@ func TestGenerate(t *testing.T) {
 
 	gen := NewGenerator("/tmp/config", "modbus")
 	gen.AddNetwork("ics_network", "192.168.1.0/24")
-	gen.AddMasterService(0, "192.168.1.10", "ics_network")
+	gen.AddMasterService(0, "192.168.1.10", "ics_network", nil)
 	gen.AddSlaveService(0, "192.168.1.20", "ics_network", 502, nil)
 
 	err := gen.Generate(tmpFile)

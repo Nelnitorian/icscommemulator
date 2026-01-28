@@ -11,7 +11,7 @@ import (
 )
 
 type Service interface {
-	Start(dockerComposePath string, simulationTime int, outputFile, configPath string) (string, error)
+	Start(dockerComposePath string, simulationTime int, outputFile, configPath string, networkEmulation *NetworkEmulation) (string, error)
 	Stop() error
 	GetStatus() Status
 	IsRunning() bool
@@ -30,7 +30,7 @@ func NewService() Service {
 	}
 }
 
-func (s *service) Start(dockerComposePath string, simulationTime int, outputFile, configPath string) (string, error) {
+func (s *service) Start(dockerComposePath string, simulationTime int, outputFile, configPath string, networkEmulation *NetworkEmulation) (string, error) {
 	s.mu.Lock()
 	if s.isRunning {
 		s.mu.Unlock()
@@ -40,9 +40,7 @@ func (s *service) Start(dockerComposePath string, simulationTime int, outputFile
 	s.currentError = nil
 	s.mu.Unlock()
 
-	// NO LIMPIAR AQUÍ - los archivos acaban de generarse
-
-	s.runner.Configure(dockerComposePath, simulationTime, outputFile, configPath)
+	s.runner.Configure(dockerComposePath, simulationTime, outputFile, configPath, networkEmulation)
 
 	go func() {
 		if err := s.runner.Run(); err != nil {
@@ -51,12 +49,12 @@ func (s *service) Start(dockerComposePath string, simulationTime int, outputFile
 			s.currentError = err
 			s.mu.Unlock()
 		}
-		
+
 		s.mu.Lock()
 		s.isRunning = false
 		s.mu.Unlock()
-		
-		// Limpiar DESPUÉS de que Docker termine
+
+		// Clean up after Docker exits to avoid removing active configs.
 		time.Sleep(1 * time.Second)
 		if err := cleanConfigDirectory(configPath); err != nil {
 			logger.Warning("Failed to clean config directory after run: %v", err)
@@ -72,19 +70,18 @@ func (s *service) Stop() error {
 	isRunning := s.isRunning
 	configPath := s.runner.configPath
 	s.mu.RUnlock()
-	
+
 	if !isRunning {
 		return fmt.Errorf("no scenario is running")
 	}
 
 	err := s.runner.Stop()
-	
-	// Limpiar después de detener
+
 	time.Sleep(1 * time.Second)
 	if cleanErr := cleanConfigDirectory(configPath); cleanErr != nil {
 		logger.Warning("Failed to clean after stop: %v", cleanErr)
 	}
-	
+
 	return err
 }
 
@@ -102,19 +99,19 @@ func cleanConfigDirectory(configPath string) error {
 	if configPath == "" || configPath == "/" || configPath == "/tmp" {
 		return fmt.Errorf("invalid config path: %s", configPath)
 	}
-	
+
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		logger.Debug("Config directory does not exist: %s", configPath)
 		return nil
 	}
-	
+
 	logger.Info("Cleaning config directory: %s", configPath)
-	
+
 	if err := os.RemoveAll(configPath); err != nil {
 		logger.Warning("Failed to remove config directory: %v", err)
 		return err
 	}
-	
+
 	logger.Info("Config directory cleaned successfully")
 	return nil
 }

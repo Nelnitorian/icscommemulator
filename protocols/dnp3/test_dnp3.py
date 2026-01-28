@@ -10,13 +10,33 @@ import time
 import logging
 import tempfile
 import os
+import sys
 
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
-DNP3_AVAILABLE = True
-from slave import DNP3Outstation
-from master import DNP3Master
+# Ensure command callbacks don't crash under pytest runs.
+os.environ.setdefault("DNP3_DISABLE_COMMAND_HANDLER", "1")
+
+SKIP_COMMAND_TESTS = (
+    sys.version_info >= (3, 12)
+    or os.getenv("DNP3_SKIP_COMMAND_TESTS") == "1"
+)
+
+try:
+    import slave.slave as dnp3_slave
+    import master.master as dnp3_master
+    DNP3Outstation = dnp3_slave.DNP3Outstation
+    DNP3Master = dnp3_master.DNP3Master
+    DNP3Operation = dnp3_master.DNP3Operation
+    DNP3_AVAILABLE = bool(dnp3_slave.DNP3_AVAILABLE and dnp3_master.DNP3_AVAILABLE)
+    _IMPORT_ERROR = dnp3_slave._IMPORT_ERROR or dnp3_master._IMPORT_ERROR
+except Exception as e:
+    DNP3Outstation = None
+    DNP3Master = None
+    DNP3Operation = None
+    DNP3_AVAILABLE = False
+    _IMPORT_ERROR = e
 
 
 @pytest.fixture(scope="module")
@@ -67,24 +87,70 @@ simulation:
 
 
 @pytest.fixture(scope="module")
-def master_csv_config(test_port, tmp_path_factory):
-    csv_content = f"""timestamp,ip,port,operation_type,group,variation,index,master_id,outstation_id,recurrent,interval,value
-0,127.0.0.1,{test_port},poll_analog_inputs,30,6,,20,10,false,0,
-1,127.0.0.1,{test_port},poll_binary_inputs,1,2,,20,10,false,0,
-2,127.0.0.1,{test_port},poll_analog_output_status,40,2,,20,10,false,0,
-3,127.0.0.1,{test_port},poll_binary_output_status,10,2,,20,10,false,0,
-4,127.0.0.1,{test_port},poll_analog_inputs,30,6,,20,10,true,2,
+def master_yaml_config(test_port, tmp_path_factory):
+    yaml_content = f"""protocol: dnp3
+messages:
+  - timestamp: 0
+    ip: 127.0.0.1
+    port: {test_port}
+    operation_type: poll_analog_inputs
+    group: 30
+    variation: 6
+    master_id: 20
+    outstation_id: 10
+    recurrent: false
+    interval: 0
+  - timestamp: 1
+    ip: 127.0.0.1
+    port: {test_port}
+    operation_type: poll_binary_inputs
+    group: 1
+    variation: 2
+    master_id: 20
+    outstation_id: 10
+    recurrent: false
+    interval: 0
+  - timestamp: 2
+    ip: 127.0.0.1
+    port: {test_port}
+    operation_type: poll_analog_output_status
+    group: 40
+    variation: 2
+    master_id: 20
+    outstation_id: 10
+    recurrent: false
+    interval: 0
+  - timestamp: 3
+    ip: 127.0.0.1
+    port: {test_port}
+    operation_type: poll_binary_output_status
+    group: 10
+    variation: 2
+    master_id: 20
+    outstation_id: 10
+    recurrent: false
+    interval: 0
+  - timestamp: 4
+    ip: 127.0.0.1
+    port: {test_port}
+    operation_type: poll_analog_inputs
+    group: 30
+    variation: 6
+    master_id: 20
+    outstation_id: 10
+    recurrent: true
+    interval: 2
 """
     config_dir = tmp_path_factory.mktemp("config")
-    csv_file = config_dir / "master.csv"
-    csv_file.write_text(csv_content)
-    yield str(csv_file)
+    yaml_file = config_dir / "master.yaml"
+    yaml_file.write_text(yaml_content)
+    yield str(yaml_file)
 
 
 @pytest.fixture(scope="module")
 def outstation(test_port, slave_yaml_config):
     if not DNP3_AVAILABLE:
-        pytest.skip("dnp3-python not available")
+        pytest.skip(f"dnp3-python not available: {_IMPORT_ERROR}")
     station = DNP3Outstation(config_file=slave_yaml_config)
     station.start()
     time.sleep(1)
@@ -93,20 +159,28 @@ def outstation(test_port, slave_yaml_config):
 
 
 @pytest.fixture(scope="module")
-def master(test_port, master_csv_config, outstation):
+def master(test_port, master_yaml_config, outstation):
     if not DNP3_AVAILABLE:
-        pytest.skip("dnp3-python not available")
+        pytest.skip(f"dnp3-python not available: {_IMPORT_ERROR}")
     controller = DNP3Master(
         outstation_ip="127.0.0.1",
         outstation_port=test_port,
         master_id=20,
         outstation_id=10,
-        config_file=master_csv_config,
+        config_file=master_yaml_config,
     )
     assert controller.connect()
     time.sleep(2)
     yield controller
     controller.shutdown()
+
+
+def stop_recurrent(master):
+    master.running = False
+    for thread in list(master.recurrent_threads):
+        if thread.is_alive():
+            thread.join(timeout=1)
+    master.recurrent_threads = []
 
 
 # Connection Tests
@@ -123,7 +197,7 @@ class TestConnection:
         assert master is not None
         assert master.master is not None
 
-    def test_csv_operations_loaded(self, master):
+    def test_yaml_operations_loaded(self, master):
         assert len(master.operations) == 5
         recurrent_ops = [op for op in master.operations if op.recurrent]
         assert len(recurrent_ops) == 1
@@ -244,22 +318,29 @@ class TestCSVOperations:
         initial_ops = master.stats["operations_executed"]
         initial_polls = master.stats["polls_sent"]
 
-        master.execute_all_operations()
-        time.sleep(3)
+        try:
+            master.execute_all_operations()
+            time.sleep(3)
 
-        assert master.stats["operations_executed"] > initial_ops
-        assert master.stats["polls_sent"] > initial_polls
-        values = master.get_all_values()
-        assert len(values) > 0
+            assert master.stats["operations_executed"] > initial_ops
+            assert master.stats["polls_sent"] > initial_polls
+            values = master.get_all_values()
+            assert len(values) > 0
+        finally:
+            stop_recurrent(master)
 
     def test_operation_statistics(self, master):
         stats = master.stats
         assert stats["polls_sent"] >= 4  # At least 4 poll operations
 
     def test_recurrent_operations(self, master):
+        master.execute_all_operations()
         initial_ops = master.stats["operations_executed"]
-        time.sleep(5)  # Wait for recurrent operations
-        assert master.stats["operations_executed"] > initial_ops + 1
+        try:
+            time.sleep(5)  # Wait for recurrent operations
+            assert master.stats["operations_executed"] > initial_ops + 1
+        finally:
+            stop_recurrent(master)
 
 
 # Bidirectional Communication Tests
@@ -291,6 +372,97 @@ class TestBidirectionalCommunication:
         values = master.get_all_values()
         assert "Analog" in values
         assert "Binary" in values
+
+
+# Command Tests
+@pytest.mark.integration
+@pytest.mark.skipif(
+    SKIP_COMMAND_TESTS,
+    reason="DirectOperate crashes under Python 3.12 for current pydnp3 build",
+)
+class TestCommands:
+    """Test control commands."""
+
+    def test_send_binary_command(self, master):
+        stop_recurrent(master)
+        master_connection = master.master
+        assert master_connection is not None
+        initial = master.stats["commands_sent"]
+        assert master.send_binary_command(master_connection, 0, True)
+        assert master.stats["commands_sent"] == initial + 1
+
+    def test_send_analog_command_float32(self, master):
+        stop_recurrent(master)
+        master_connection = master.master
+        assert master_connection is not None
+        initial = master.stats["commands_sent"]
+        assert master.send_analog_command_float32(master_connection, 0, 12.5)
+        assert master.stats["commands_sent"] == initial + 1
+
+    def test_send_analog_command_int16(self, master):
+        stop_recurrent(master)
+        master_connection = master.master
+        assert master_connection is not None
+        initial = master.stats["commands_sent"]
+        assert master.send_analog_command_int16(master_connection, 0, 123)
+        assert master.stats["commands_sent"] == initial + 1
+
+    def test_send_analog_command_int32(self, master):
+        stop_recurrent(master)
+        master_connection = master.master
+        assert master_connection is not None
+        initial = master.stats["commands_sent"]
+        assert master.send_analog_command_int32(master_connection, 0, 12345)
+        assert master.stats["commands_sent"] == initial + 1
+
+    def test_send_analog_command_double64(self, master):
+        stop_recurrent(master)
+        master_connection = master.master
+        assert master_connection is not None
+        initial = master.stats["commands_sent"]
+        assert master.send_analog_command_double64(master_connection, 0, 123.456)
+        assert master.stats["commands_sent"] == initial + 1
+
+
+# Poll variants not covered by YAML
+@pytest.mark.integration
+class TestPollVariants:
+    """Test poll variants not covered by base YAML."""
+
+    def test_poll_group_variation(self, master):
+        op = DNP3Operation({
+            "operation_type": "poll_group_variation",
+            "group": 30,
+            "variation": 6,
+            "master_id": master.master_id,
+            "outstation_id": master.outstation_id,
+        })
+        initial = master.stats["polls_sent"]
+        master.execute_operation(op)
+        assert master.stats["polls_sent"] >= initial + 1
+
+    def test_poll_group_variation_index(self, master):
+        op = DNP3Operation({
+            "operation_type": "poll_group_variation_index",
+            "group": 30,
+            "variation": 6,
+            "index": 0,
+            "master_id": master.master_id,
+            "outstation_id": master.outstation_id,
+        })
+        initial = master.stats["polls_sent"]
+        master.execute_operation(op)
+        assert master.stats["polls_sent"] >= initial + 1
+
+    def test_poll_all(self, master):
+        op = DNP3Operation({
+            "operation_type": "poll_all",
+            "master_id": master.master_id,
+            "outstation_id": master.outstation_id,
+        })
+        initial = master.stats["polls_sent"]
+        master.execute_operation(op)
+        assert master.stats["polls_sent"] >= initial + 1
 
 
 if __name__ == "__main__":

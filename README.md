@@ -1,58 +1,91 @@
 # ICSCommEmulator
 
-## About the project
+Herramienta en Go para emular comunicaciones ICS (Modbus, DNP3 e IEC104),
+editar escenarios desde una UI web y ejecutar simulaciones con Docker Compose
+capturando trafico en PCAP con `tcpdump`. Tambien soporta ataques definidos en
+`web/static/attacks/attacks.json` y genera etiquetas en `*.pcap.labels.json`.
 
-ICSCommEmulator is an emulation tool designed to emulate communication protocols used in Industrial Control Systems (ICS). The project aims to facilitate the testing and validation of ICS communication by providing a controlled environment where the Modbus protocol can be emulated. It uses Docker for containerization, tcpdump for network traffic capture, and Python for scripting and automation.
+## Requisitos
 
-## Installation
+- Go 1.24.x (ver `go.mod`).
+- Docker Engine y Docker Compose v2 (plugin).
+- `tcpdump` (para capturar trafico).
+- `tc` (paquete `iproute2`, para emulacion de red).
 
-For the installation process, a script `install.sh` has been included.
+Opcional (solo si necesitas ejecutar utilidades Python o el stack DNP3 fuera
+de Docker):
+- Python 3 y `pip`, con dependencias en `requirements.txt` (incluye `dnp3-python`).
 
-The Python library requirements are in the `requirements.txt` file. Installation via `pip install -r requirements.txt` can be done.
+## Instalacion
 
-The package requirements can be found within this document or in the `install.sh` file.
+En Linux puedes usar el script `install.sh` como referencia. Para una
+instalacion manual basica:
 
-> [!NOTE]
-> In the installation script, the permissions for /usr/bin/tcpdump are modified. This allows it to be ran without sudo, as it is required by main.py.
+```
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io \
+  docker-buildx-plugin docker-compose-plugin tcpdump iproute2
+```
 
-## Dependencies
+Si planeas usar los componentes Python:
 
-### Docker
+```
+pip install -r requirements.txt
+```
 
-- Docker version 27.3.1, build ce12230
-- Docker Compose version v2.29.7
+Nota: `tcpdump` necesita permisos. Puedes ejecutar el servidor con `sudo` o
+dar capacidades al binario (`setcap cap_net_raw,cap_net_admin+eip /usr/bin/tcpdump`).
 
-### Tcpdump
+## Ejecucion
 
-- tcpdump version 4.99.1
-- libpcap version 1.10.1 (with TPACKET_V3)
-- OpenSSL 3.0.2 15 Mar 2022
+Servidor web (por defecto en `127.0.0.1:8080`):
 
-### Python
+```
+go run ./cmd/icscommemulator
+```
 
-- Python 3.10.12
+Flags disponibles:
 
-| Library   | Version | Usage                        |
-|-----------|---------|------------------------------|
-| flask     | 3.0.3   | Web framework for the API    |
-| pandas    | 2.2.3   | Data manipulation            |
-| pymodbus  | 3.7.2   | Modbus communication         |
-| pytest    | 8.3.3   | Unit testing framework       |
-| waitress  | 3.0.0   | WSGI server for Flask        |
+- `-host` (default `127.0.0.1`)
+- `-port` (default `8080`)
+- `-log` (`DEBUG|INFO|WARNING|ERROR`)
+- `-config` (ruta a YAML/JSON para importar escenarios al inicio)
 
-### Frontend
+Ejemplo con importacion de escenarios:
 
-As part of the frontend, the following JavaScript libraries have been used:
+```
+go run ./cmd/icscommemulator -config ./scenarios/config.yaml
+```
 
-- [Cytoscape.js](https://unpkg.com/cytoscape@3.18.1/dist/cytoscape.min.js)
-- [ipaddr.js](https://github.com/whitequark/ipaddr.js/blob/main/ipaddr.min.js)
+La UI queda en `http://127.0.0.1:8080` y los PCAP se guardan en `outputs/`.
 
-## Usage
+Variables de entorno utiles:
 
-Once installed, the main script can be run. It will deploy a web server listening on 0.0.0.0:8080.
+- `CORS_ALLOW_ORIGINS`: lista separada por comas para CORS.
+- `ICS_ATTACKS_CATALOG_PATH`: ruta alternativa al catalogo de ataques.
 
-```python3 main.py```
+## Tests
 
-## License
+Ejecutar toda la suite Go:
 
-This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
+```
+go test ./...
+```
+
+Tests Python del paquete DNP3 (solo si tienes dependencias Python):
+
+```
+cd lib/dnp3-python
+python3 -m pytest -q tests
+```
+
+Alternativas con Make:
+
+```
+make test-all
+make test-unit
+```
+
+## Licencia
+
+GNU GPLv3. Ver `LICENSE`.

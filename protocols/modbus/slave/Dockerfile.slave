@@ -14,24 +14,46 @@ RUN go mod init modbus-slave && \
     go get gopkg.in/yaml.v3@v3.0.1
 
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o slave ./main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o slave ./main.go
 
-# Final stage
-FROM alpine:latest
+# Tiny TCP healthcheck binary (avoids nc + shell)
+RUN cat <<'EOF' >/tmp/healthcheck.go
+package main
 
-# Add ca-certificates for HTTPS requests (if needed)
-RUN apk --no-cache add ca-certificates tzdata
+import (
+	"fmt"
+	"net"
+	"os"
+	"time"
+)
+
+func main() {
+	if len(os.Args) < 3 {
+		fmt.Println("usage: healthcheck <host> <port>")
+		os.Exit(2)
+	}
+	addr := net.JoinHostPort(os.Args[1], os.Args[2])
+	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	_ = conn.Close()
+}
+EOF
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o healthcheck /tmp/healthcheck.go
+
+# Final stage (minimal)
+FROM scratch
 
 WORKDIR /app
 
-# Copy the binary from build stage
-COPY --from=build /app/slave ./slave
-
-# Make sure the binary is executable
-RUN chmod +x ./slave
+# Copy binaries from build stage
+COPY --from=build /app/slave /app/slave
+COPY --from=build /app/healthcheck /app/healthcheck
 
 # Expose Modbus TCP port
 EXPOSE 502
 
 # Run the slave application
-ENTRYPOINT ["./slave"]
+ENTRYPOINT ["/app/slave"]

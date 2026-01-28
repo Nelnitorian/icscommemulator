@@ -41,7 +41,7 @@ func TestSaveScenario(t *testing.T) {
 func TestGetCreatedScenarios(t *testing.T) {
 	// Create test scenarios
 	testScenarios := []string{"scenario1", "scenario2", "scenario3"}
-	
+
 	for _, name := range testScenarios {
 		scenarioData := adapter.CytoscapeData{
 			Protocol:  "modbus",
@@ -69,7 +69,7 @@ func TestGetCreatedScenarios(t *testing.T) {
 
 func TestCheckScenarioExists(t *testing.T) {
 	scenarioName := "test_exists"
-	
+
 	// Initially should not exist
 	assert.False(t, CheckScenarioExists(scenarioName))
 
@@ -120,7 +120,7 @@ func TestGetCytoscapeScenario(t *testing.T) {
 
 func TestDeleteScenario(t *testing.T) {
 	scenarioName := "test_delete"
-	
+
 	// Create scenario
 	scenarioData := adapter.CytoscapeData{
 		Protocol:  "modbus",
@@ -144,7 +144,7 @@ func TestDeleteScenario(t *testing.T) {
 
 func TestGetScenarioSize(t *testing.T) {
 	scenarioName := "test_size"
-	
+
 	// Create scenario
 	scenarioData := adapter.CytoscapeData{
 		Protocol:  "modbus",
@@ -160,7 +160,7 @@ func TestGetScenarioSize(t *testing.T) {
 	// Get size
 	size, err := GetScenarioSize(scenarioName)
 	require.NoError(t, err)
-	
+
 	assert.Greater(t, size, int64(0))
 
 	// Cleanup
@@ -169,7 +169,7 @@ func TestGetScenarioSize(t *testing.T) {
 
 func TestValidateScenarioFiles(t *testing.T) {
 	scenarioName := "test_validate"
-	
+
 	// Create scenario
 	scenarioData := adapter.CytoscapeData{
 		Protocol:  "modbus",

@@ -136,7 +136,7 @@ func GetCytoscapeScenario(name string) (adapter.CytoscapeData, error) {
 	jsonFile := filepath.Join(scenarioFolder, "config.json")
 
 	var data adapter.CytoscapeData
-	
+
 	jsonData, err := os.ReadFile(jsonFile)
 	if err != nil {
 		return data, fmt.Errorf("failed to read JSON file: %w", err)
@@ -156,7 +156,7 @@ func GetCytoscapeScenarioAsMap(name string) (map[string]interface{}, error) {
 	jsonFile := filepath.Join(scenarioFolder, "config.json")
 
 	var data map[string]interface{}
-	
+
 	jsonData, err := os.ReadFile(jsonFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read JSON file: %w", err)
@@ -183,7 +183,7 @@ func GetPythonScenario(name string) (map[string]interface{}, error) {
 	yamlFile := filepath.Join(scenarioFolder, "config.yaml")
 
 	var data map[string]interface{}
-	
+
 	yamlData, err := os.ReadFile(yamlFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read YAML file: %w", err)
@@ -200,7 +200,7 @@ func GetPythonScenario(name string) (map[string]interface{}, error) {
 // DeleteScenario removes a scenario and all its files
 func DeleteScenario(name string) error {
 	scenarioFolder := filepath.Join(SCENARIO_ROOT_FOLDER, name)
-	
+
 	if !CheckScenarioExists(name) {
 		return fmt.Errorf("scenario '%s' does not exist", name)
 	}

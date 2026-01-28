@@ -1,92 +1,90 @@
-ip: "0.0.0.0"
-port: 2404
-tick_rate_ms: 100
-select_timeout_ms: 10000
-max_connections: 5
+protocol: iec104
+node:
+  ip: "0.0.0.0"
+  port: 2404
+  tick_rate_ms: 100
+  select_timeout_ms: 10000
+  max_connections: 5
 
-protocol_parameters:
-  t1: 15  # message_timeout (seconds)
-  t2: 10  # confirm_interval (seconds)
-  t3: 20  # keep_alive_interval (seconds)
-  k: 12   # send_window_size
-  w: 8    # receive_window_size
+  protocol_parameters:
+    t1: 15
+    t2: 10
+    t3: 20
+    k: 12
+    w: 8
 
-stations:
-  - common_address: 1
-    points:
-      # M_SP_NA_1 - Single-point information
-      single_points:
-        - ioa: 1001
-          value: true
-          report_ms: 0
-        - ioa: 1002
-          value: false
-          report_ms: 0
-        - ioa: 1003
-          value: true
-          report_ms: 10000
-        - ioa: 1004
-          value: false
-          report_ms: 0
-      
-      # M_ME_NB_1 - Measured scaled value
-      measured_scaled:
-        - ioa: 5001
-          value: 100
-          report_ms: 5000
-        - ioa: 5002
-          value: 200
-          report_ms: 5000
-        - ioa: 5003
-          value: 350
-          report_ms: 0
-      
-      # M_ME_NC_1 - Measured short (float)
-      measured_short:
-        - ioa: 6001
-          value: 12.34
-          report_ms: 5000
-        - ioa: 6002
-          value: 56.78
-          report_ms: 5000
-        - ioa: 6003
-          value: 99.99
-          report_ms: 0
-        - ioa: 6004
-          value: -15.5
-          report_ms: 0
-      
-      # Comandos
-      single_commands:
-        - ioa: 8001
-          related_ioa: 1001
-      
-      setpoint_short:
-        - ioa: 11001
-          related_ioa: 6001
-          
-      measured_short_time:
-        - ioa: 6101
-          value: 25.5
-          report_ms: 5000
-        - ioa: 6102
-          value: 50.0
-          report_ms: 5000
-      
-      single_points_time:
-        - ioa: 1101
-          value: true
-          report_ms: 8000
-        - ioa: 1102
-          value: false
-          report_ms: 8000
-      
-      single_commands_time:
-        - ioa: 8101
-          related_ioa: 1101
-      
-      setpoint_short_time:
-        - ioa: 11101
-          related_ioa: 6101
+  stations:
+    - common_address: 1
+      points:
+        single_points:
+          - ioa: 1001
+            value: true
+            report_ms: 0
+          - ioa: 1002
+            value: false
+            report_ms: 0
+          - ioa: 1003
+            value: true
+            report_ms: 10000
+          - ioa: 1004
+            value: false
+            report_ms: 0
 
-authorized_masters: [0, 1, 2, 3]
+        measured_scaled:
+          - ioa: 5001
+            value: 100
+            report_ms: 5000
+          - ioa: 5002
+            value: 200
+            report_ms: 5000
+          - ioa: 5003
+            value: 350
+            report_ms: 0
+
+        measured_short:
+          - ioa: 6001
+            value: 12.34
+            report_ms: 5000
+          - ioa: 6002
+            value: 56.78
+            report_ms: 5000
+          - ioa: 6003
+            value: 99.99
+            report_ms: 0
+          - ioa: 6004
+            value: -15.5
+            report_ms: 0
+
+        single_commands:
+          - ioa: 8001
+            related_ioa: 1001
+
+        setpoint_short:
+          - ioa: 11001
+            related_ioa: 6001
+
+        measured_short_time:
+          - ioa: 6101
+            value: 25.5
+            report_ms: 5000
+          - ioa: 6102
+            value: 50.0
+            report_ms: 5000
+
+        single_points_time:
+          - ioa: 1101
+            value: true
+            report_ms: 8000
+          - ioa: 1102
+            value: false
+            report_ms: 8000
+
+        single_commands_time:
+          - ioa: 8101
+            related_ioa: 1101
+
+        setpoint_short_time:
+          - ioa: 11101
+            related_ioa: 6101
+
+  authorized_masters: [0, 1, 2, 3]

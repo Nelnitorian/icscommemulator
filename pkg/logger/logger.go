@@ -67,7 +67,7 @@ func (l *logger) formatMessage(format string) string {
 	if len(l.fields) == 0 {
 		return format
 	}
-	
+
 	fieldsStr := ""
 	for k, v := range l.fields {
 		fieldsStr += fmt.Sprintf(" %s=%v", k, v)

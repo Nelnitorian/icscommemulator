@@ -42,6 +42,11 @@ type SlaveConfig struct {
 	Identity         IdentityConfig `yaml:"identity"`
 }
 
+type FileConfig struct {
+	Protocol string      `yaml:"protocol"`
+	Node     SlaveConfig `yaml:"node"`
+}
+
 type ModbusSlave struct {
 	config   SlaveConfig
 	syncFile string
@@ -58,6 +63,17 @@ func NewModbusSlave(configFile, syncFile string) (*ModbusSlave, error) {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
+	var wrapped FileConfig
+	if err := yaml.Unmarshal(data, &wrapped); err == nil {
+		if wrapped.Protocol != "" || wrapped.Node.IP != "" {
+			return &ModbusSlave{
+				config:   wrapped.Node,
+				syncFile: syncFile,
+				logger:   logger,
+			}, nil
+		}
+	}
+
 	var config SlaveConfig
 	if err := yaml.Unmarshal(data, &config); err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
@@ -70,7 +86,6 @@ func NewModbusSlave(configFile, syncFile string) (*ModbusSlave, error) {
 	}, nil
 }
 
-// parseSparseValues parses sparse format: map[string]int where keys are addresses
 func (s *ModbusSlave) parseSparseValues(values interface{}) map[int]uint16 {
 	result := make(map[int]uint16)
 
@@ -101,7 +116,6 @@ func (s *ModbusSlave) parseSparseValues(values interface{}) map[int]uint16 {
 			result[addr] = value
 		}
 	case map[interface{}]interface{}:
-		// Handle YAML unmarshaling to map[interface{}]interface{}
 		for addrKey, val := range v {
 			addrStr := fmt.Sprintf("%v", addrKey)
 			addr, err := strconv.Atoi(addrStr)
@@ -132,7 +146,6 @@ func (s *ModbusSlave) parseSparseValues(values interface{}) map[int]uint16 {
 	return result
 }
 
-// parseSequentialValues parses sequential format: array or comma-separated string
 func (s *ModbusSlave) parseSequentialValues(values interface{}) []uint16 {
 	switch v := values.(type) {
 	case []interface{}:
@@ -156,7 +169,6 @@ func (s *ModbusSlave) parseSequentialValues(values interface{}) []uint16 {
 			return []uint16{}
 		}
 
-		// Handle comma-separated values
 		parts := strings.Split(v, ",")
 		values := make([]uint16, 0, len(parts))
 		for _, part := range parts {
@@ -174,7 +186,6 @@ func (s *ModbusSlave) parseSequentialValues(values interface{}) []uint16 {
 	}
 }
 
-// parseRegisterConfig parses a register configuration supporting both sparse and sequential formats
 func (s *ModbusSlave) parseRegisterConfig(regConfig RegisterConfig) ([]uint16, map[int]uint16) {
 	var sequential []uint16
 	var sparse map[int]uint16
@@ -183,7 +194,6 @@ func (s *ModbusSlave) parseRegisterConfig(regConfig RegisterConfig) ([]uint16, m
 		sparse = s.parseSparseValues(regConfig.Values)
 		s.logger.Debugf("Parsed sparse values: %v", sparse)
 	} else {
-		// Default to sequential
 		sequential = s.parseSequentialValues(regConfig.Values)
 		s.logger.Debugf("Parsed sequential values: %v", sequential)
 	}
@@ -217,22 +227,19 @@ func (s *ModbusSlave) getPort() int {
 	case float64:
 		return int(p)
 	}
-	return 502 // Default Modbus port
+	return 502
 }
 
 func (s *ModbusSlave) start() error {
 	port := s.getPort()
 
-	// Create server
 	s.server = mbserver.NewServer()
 
-	// Parse register configurations
 	diSeq, diSparse := s.parseRegisterConfig(s.config.DiscreteInputs)
 	coSeq, coSparse := s.parseRegisterConfig(s.config.Coils)
 	irSeq, irSparse := s.parseRegisterConfig(s.config.InputRegisters)
 	hrSeq, hrSparse := s.parseRegisterConfig(s.config.HoldingRegisters)
 
-	// Set discrete inputs
 	for i, val := range diSeq {
 		s.server.DiscreteInputs[i] = byte(val)
 	}
@@ -240,7 +247,6 @@ func (s *ModbusSlave) start() error {
 		s.server.DiscreteInputs[addr] = byte(val)
 	}
 
-	// Set coils
 	for i, val := range coSeq {
 		s.server.Coils[i] = byte(val)
 	}
@@ -248,7 +254,6 @@ func (s *ModbusSlave) start() error {
 		s.server.Coils[addr] = byte(val)
 	}
 
-	// Set input registers
 	for i, val := range irSeq {
 		s.server.InputRegisters[i] = val
 	}
@@ -257,7 +262,6 @@ func (s *ModbusSlave) start() error {
 		s.logger.Infof("Set InputRegister[%d] = %d", addr, val)
 	}
 
-	// Set holding registers
 	for i, val := range hrSeq {
 		s.server.HoldingRegisters[i] = val
 	}
@@ -268,17 +272,14 @@ func (s *ModbusSlave) start() error {
 
 	s.logger.Infof("Starting Modbus TCP Server on %s:%d", s.config.IP, port)
 
-	// Log configured registers
 	if len(hrSparse) > 0 {
 		s.logger.Infof("Configured sparse holding registers: %v", hrSparse)
 	}
 
-	// Create sync file to indicate server is running
 	if err := s.touchSyncFile(); err != nil {
 		return fmt.Errorf("failed to create sync file: %w", err)
 	}
 
-	// Start server in goroutine
 	go func() {
 		address := fmt.Sprintf("%s:%d", s.config.IP, port)
 		if err := s.server.ListenTCP(address); err != nil {
@@ -286,10 +287,8 @@ func (s *ModbusSlave) start() error {
 		}
 	}()
 
-	// Wait a bit to ensure server started
 	time.Sleep(100 * time.Millisecond)
 
-	// Wait for interrupt signal
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
@@ -305,7 +304,6 @@ func (s *ModbusSlave) shutdown() error {
 		s.server.Close()
 	}
 
-	// Remove sync file
 	if err := os.Remove(s.syncFile); err != nil && !os.IsNotExist(err) {
 		s.logger.WithError(err).Warn("Failed to remove sync file")
 	}
@@ -317,7 +315,6 @@ func (s *ModbusSlave) shutdown() error {
 func main() {
 	fmt.Println("Starting ModbusSlave...")
 
-	// Allow config file paths to be overridden via environment variables
 	configFile := "/app/config/slave.yaml"
 	if envConfig := os.Getenv("SLAVE_CONFIG"); envConfig != "" {
 		configFile = envConfig

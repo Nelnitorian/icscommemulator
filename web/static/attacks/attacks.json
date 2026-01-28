@@ -1,0 +1,528 @@
+{
+  "schema_version": "icscommemulator.attack-catalog.v1",
+  "attacks": [
+    {
+      "id": "modbus_write_single_register",
+      "protocol": "modbus",
+      "technique_id": "T0831",
+      "name": "Modificar parámetro (Write Single Register)",
+      "description": "Escritura puntual en un registro para alterar el proceso.",
+      "schedule_defaults": { "start_time": 1, "interval": 0, "count": 1 },
+      "parameters": [
+        { "name": "address", "type": "int", "label": "Address", "default": 0 },
+        { "name": "value", "type": "int", "label": "Value", "default": 777 }
+      ],
+      "message_template": {
+        "function_code": 6,
+        "start_address": "{{address}}",
+        "values": ["{{value}}"],
+        "count": 1
+      }
+    },
+    {
+      "id": "modbus_write_single_coil",
+      "protocol": "modbus",
+      "technique_id": "T0831",
+      "name": "Modificar estado (Write Single Coil)",
+      "description": "Activa o desactiva una bobina específica.",
+      "schedule_defaults": { "start_time": 1, "interval": 0, "count": 1 },
+      "parameters": [
+        { "name": "address", "type": "int", "label": "Address", "default": 0 },
+        { "name": "value", "type": "int", "label": "Value (0/1)", "default": 1 }
+      ],
+      "message_template": {
+        "function_code": 5,
+        "start_address": "{{address}}",
+        "values": ["{{value}}"],
+        "count": 1
+      }
+    },
+    {
+      "id": "modbus_write_multiple_registers",
+      "protocol": "modbus",
+      "technique_id": "T0831",
+      "name": "Modificar parámetro masivo (Write Multiple Registers)",
+      "description": "Escritura en lote para sobrescribir varios registros.",
+      "schedule_defaults": { "start_time": 2, "interval": 0, "count": 1 },
+      "parameters": [
+        { "name": "address", "type": "int", "label": "Address", "default": 0 },
+        { "name": "values", "type": "list_int", "label": "Values (CSV)", "default": "10,20,30", "placeholder": "10,20,30" }
+      ],
+      "message_template": {
+        "function_code": 16,
+        "start_address": "{{address}}",
+        "values": "{{values}}",
+        "count": "{{values_count}}"
+      }
+    },
+    {
+      "id": "modbus_write_multiple_coils",
+      "protocol": "modbus",
+      "technique_id": "T0831",
+      "name": "Modificar bobinas en lote (Write Multiple Coils)",
+      "description": "Escritura masiva sobre bobinas.",
+      "schedule_defaults": { "start_time": 2, "interval": 0, "count": 1 },
+      "parameters": [
+        { "name": "address", "type": "int", "label": "Address", "default": 0 },
+        { "name": "values", "type": "list_int", "label": "Values (CSV)", "default": "1,0,1", "placeholder": "1,0,1" }
+      ],
+      "message_template": {
+        "function_code": 15,
+        "start_address": "{{address}}",
+        "values": "{{values}}",
+        "count": "{{values_count}}"
+      }
+    },
+    {
+      "id": "modbus_poll_flood",
+      "protocol": "modbus",
+      "technique_id": "T0814",
+      "name": "Saturación de lectura (Poll Flood)",
+      "description": "Lecturas frecuentes que pueden degradar el servicio.",
+      "schedule_defaults": { "start_time": 0, "interval": 1, "count": 5 },
+      "parameters": [
+        { "name": "address", "type": "int", "label": "Address", "default": 0 },
+        { "name": "count_registers", "type": "int", "label": "Count", "default": 10 }
+      ],
+      "message_template": {
+        "function_code": 3,
+        "start_address": "{{address}}",
+        "count": "{{count_registers}}"
+      }
+    },
+    {
+      "id": "modbus_read_holding_registers",
+      "protocol": "modbus",
+      "technique_id": "T0809",
+      "name": "Lectura de holding registers",
+      "description": "Exfiltración de datos mediante lectura de registros.",
+      "schedule_defaults": { "start_time": 1, "interval": 0, "count": 1 },
+      "parameters": [
+        { "name": "address", "type": "int", "label": "Address", "default": 0 },
+        { "name": "count_registers", "type": "int", "label": "Count", "default": 10 }
+      ],
+      "message_template": {
+        "function_code": 3,
+        "start_address": "{{address}}",
+        "count": "{{count_registers}}"
+      }
+    },
+    {
+      "id": "modbus_read_input_registers",
+      "protocol": "modbus",
+      "technique_id": "T0809",
+      "name": "Lectura de input registers",
+      "description": "Lectura de entradas para obtener telemetría.",
+      "schedule_defaults": { "start_time": 1, "interval": 0, "count": 1 },
+      "parameters": [
+        { "name": "address", "type": "int", "label": "Address", "default": 0 },
+        { "name": "count_registers", "type": "int", "label": "Count", "default": 8 }
+      ],
+      "message_template": {
+        "function_code": 4,
+        "start_address": "{{address}}",
+        "count": "{{count_registers}}"
+      }
+    },
+    {
+      "id": "modbus_read_coils",
+      "protocol": "modbus",
+      "technique_id": "T0809",
+      "name": "Lectura de coils",
+      "description": "Lectura de estado de bobinas.",
+      "schedule_defaults": { "start_time": 1, "interval": 0, "count": 1 },
+      "parameters": [
+        { "name": "address", "type": "int", "label": "Address", "default": 0 },
+        { "name": "count_registers", "type": "int", "label": "Count", "default": 8 }
+      ],
+      "message_template": {
+        "function_code": 1,
+        "start_address": "{{address}}",
+        "count": "{{count_registers}}"
+      }
+    },
+    {
+      "id": "modbus_read_discrete_inputs",
+      "protocol": "modbus",
+      "technique_id": "T0809",
+      "name": "Lectura de discrete inputs",
+      "description": "Lectura de entradas discretas.",
+      "schedule_defaults": { "start_time": 1, "interval": 0, "count": 1 },
+      "parameters": [
+        { "name": "address", "type": "int", "label": "Address", "default": 0 },
+        { "name": "count_registers", "type": "int", "label": "Count", "default": 8 }
+      ],
+      "message_template": {
+        "function_code": 2,
+        "start_address": "{{address}}",
+        "count": "{{count_registers}}"
+      }
+    },
+    {
+      "id": "dnp3_send_binary_command",
+      "protocol": "dnp3",
+      "technique_id": "T0813",
+      "name": "Comando binario no autorizado",
+      "description": "Envía un control binario al outstation.",
+      "schedule_defaults": { "start_time": 1, "interval": 0, "count": 1 },
+      "parameters": [
+        { "name": "index", "type": "int", "label": "Index", "default": 0 },
+        { "name": "value", "type": "string", "label": "Value (0/1)", "default": "1" }
+      ],
+      "message_template": {
+        "operation_type": "send_binary_command",
+        "index": "{{index}}",
+        "value": "{{value}}"
+      }
+    },
+    {
+      "id": "dnp3_send_analog_command_int16",
+      "protocol": "dnp3",
+      "technique_id": "T0831",
+      "name": "Comando analógico (Int16)",
+      "description": "Envía setpoint analógico int16.",
+      "schedule_defaults": { "start_time": 2, "interval": 0, "count": 1 },
+      "parameters": [
+        { "name": "index", "type": "int", "label": "Index", "default": 0 },
+        { "name": "value", "type": "int", "label": "Value", "default": 55 }
+      ],
+      "message_template": {
+        "operation_type": "send_analog_command_int16",
+        "index": "{{index}}",
+        "value": "{{value}}"
+      }
+    },
+    {
+      "id": "dnp3_send_analog_command_float32",
+      "protocol": "dnp3",
+      "technique_id": "T0831",
+      "name": "Comando analógico (Float32)",
+      "description": "Envía setpoint analógico float.",
+      "schedule_defaults": { "start_time": 2, "interval": 0, "count": 1 },
+      "parameters": [
+        { "name": "index", "type": "int", "label": "Index", "default": 0 },
+        { "name": "value", "type": "float", "label": "Value", "default": 12.5 }
+      ],
+      "message_template": {
+        "operation_type": "send_analog_command_float32",
+        "index": "{{index}}",
+        "value": "{{value}}"
+      }
+    },
+    {
+      "id": "dnp3_send_analog_command_int32",
+      "protocol": "dnp3",
+      "technique_id": "T0831",
+      "name": "Comando analógico (Int32)",
+      "description": "Envía setpoint analógico int32.",
+      "schedule_defaults": { "start_time": 2, "interval": 0, "count": 1 },
+      "parameters": [
+        { "name": "index", "type": "int", "label": "Index", "default": 0 },
+        { "name": "value", "type": "int", "label": "Value", "default": 32000 }
+      ],
+      "message_template": {
+        "operation_type": "send_analog_command_int32",
+        "index": "{{index}}",
+        "value": "{{value}}"
+      }
+    },
+    {
+      "id": "dnp3_poll_group_variation",
+      "protocol": "dnp3",
+      "technique_id": "T0814",
+      "name": "Sondeo por grupo/variación",
+      "description": "Polling específico de grupo/variación.",
+      "schedule_defaults": { "start_time": 0, "interval": 0, "count": 1 },
+      "parameters": [
+        { "name": "group", "type": "int", "label": "Group", "default": 30 },
+        { "name": "variation", "type": "int", "label": "Variation", "default": 6 }
+      ],
+      "message_template": {
+        "operation_type": "poll_group_variation",
+        "group": "{{group}}",
+        "variation": "{{variation}}"
+      }
+    },
+    {
+      "id": "dnp3_poll_group_variation_index",
+      "protocol": "dnp3",
+      "technique_id": "T0814",
+      "name": "Sondeo por grupo/variación/índice",
+      "description": "Polling específico por índice.",
+      "schedule_defaults": { "start_time": 0, "interval": 0, "count": 1 },
+      "parameters": [
+        { "name": "group", "type": "int", "label": "Group", "default": 30 },
+        { "name": "variation", "type": "int", "label": "Variation", "default": 6 },
+        { "name": "index", "type": "int", "label": "Index", "default": 0 }
+      ],
+      "message_template": {
+        "operation_type": "poll_group_variation_index",
+        "group": "{{group}}",
+        "variation": "{{variation}}",
+        "index": "{{index}}"
+      }
+    },
+    {
+      "id": "dnp3_poll_flood",
+      "protocol": "dnp3",
+      "technique_id": "T0814",
+      "name": "Saturación de sondeos",
+      "description": "Sondeos recurrentes con alta frecuencia.",
+      "schedule_defaults": { "start_time": 0, "interval": 1, "count": 5 },
+      "parameters": [],
+      "message_template": {
+        "operation_type": "poll_all"
+      }
+    },
+    {
+      "id": "dnp3_poll_analog_inputs",
+      "protocol": "dnp3",
+      "technique_id": "T0809",
+      "name": "Sondeo de analog inputs",
+      "description": "Lectura de valores analógicos del outstation.",
+      "schedule_defaults": { "start_time": 1, "interval": 0, "count": 1 },
+      "parameters": [],
+      "message_template": {
+        "operation_type": "poll_analog_inputs"
+      }
+    },
+    {
+      "id": "dnp3_poll_binary_inputs",
+      "protocol": "dnp3",
+      "technique_id": "T0809",
+      "name": "Sondeo de binary inputs",
+      "description": "Lectura de entradas binarias del outstation.",
+      "schedule_defaults": { "start_time": 1, "interval": 0, "count": 1 },
+      "parameters": [],
+      "message_template": {
+        "operation_type": "poll_binary_inputs"
+      }
+    },
+    {
+      "id": "dnp3_poll_analog_output_status",
+      "protocol": "dnp3",
+      "technique_id": "T0809",
+      "name": "Sondeo de analog output status",
+      "description": "Lectura del estado de salidas analógicas.",
+      "schedule_defaults": { "start_time": 1, "interval": 0, "count": 1 },
+      "parameters": [],
+      "message_template": {
+        "operation_type": "poll_analog_output_status"
+      }
+    },
+    {
+      "id": "dnp3_poll_binary_output_status",
+      "protocol": "dnp3",
+      "technique_id": "T0809",
+      "name": "Sondeo de binary output status",
+      "description": "Lectura del estado de salidas binarias.",
+      "schedule_defaults": { "start_time": 1, "interval": 0, "count": 1 },
+      "parameters": [],
+      "message_template": {
+        "operation_type": "poll_binary_output_status"
+      }
+    },
+    {
+      "id": "dnp3_send_analog_command_double64",
+      "protocol": "dnp3",
+      "technique_id": "T0831",
+      "name": "Comando analógico (Double64)",
+      "description": "Envía setpoint analógico Double64.",
+      "schedule_defaults": { "start_time": 2, "interval": 0, "count": 1 },
+      "parameters": [
+        { "name": "index", "type": "int", "label": "Index", "default": 0 },
+        { "name": "value", "type": "float", "label": "Value", "default": 33.3 }
+      ],
+      "message_template": {
+        "operation_type": "send_analog_command_double64",
+        "index": "{{index}}",
+        "value": "{{value}}"
+      }
+    },
+    {
+      "id": "iec104_single_command",
+      "protocol": "iec104",
+      "technique_id": "T0813",
+      "name": "Single Command no autorizado",
+      "description": "Activa un comando simple sobre el IOA objetivo.",
+      "schedule_defaults": { "start_time": 1, "interval": 0, "count": 1 },
+      "parameters": [
+        { "name": "ioa", "type": "int", "label": "IOA", "default": 1 },
+        { "name": "value", "type": "string", "label": "Value (on/off)", "default": "on" }
+      ],
+      "message_template": {
+        "type_id": 45,
+        "ioa": "{{ioa}}",
+        "cot": 6,
+        "value": "{{value}}"
+      }
+    },
+    {
+      "id": "iec104_double_command",
+      "protocol": "iec104",
+      "technique_id": "T0813",
+      "name": "Double Command no autorizado",
+      "description": "Envía comando doble sobre el IOA objetivo.",
+      "schedule_defaults": { "start_time": 2, "interval": 0, "count": 1 },
+      "parameters": [
+        { "name": "ioa", "type": "int", "label": "IOA", "default": 1 },
+        { "name": "value", "type": "string", "label": "Value (on/off)", "default": "on" }
+      ],
+      "message_template": {
+        "type_id": 46,
+        "ioa": "{{ioa}}",
+        "cot": 6,
+        "value": "{{value}}"
+      }
+    },
+    {
+      "id": "iec104_setpoint_scaled",
+      "protocol": "iec104",
+      "technique_id": "T0831",
+      "name": "Setpoint escalado",
+      "description": "Envía setpoint escalado (C_SE_NB_1).",
+      "schedule_defaults": { "start_time": 2, "interval": 0, "count": 1 },
+      "parameters": [
+        { "name": "ioa", "type": "int", "label": "IOA", "default": 2 },
+        { "name": "value", "type": "int", "label": "Value", "default": 120 }
+      ],
+      "message_template": {
+        "type_id": 49,
+        "ioa": "{{ioa}}",
+        "cot": 6,
+        "value": "{{value}}"
+      }
+    },
+    {
+      "id": "iec104_setpoint_command",
+      "protocol": "iec104",
+      "technique_id": "T0831",
+      "name": "Setpoint no autorizado",
+      "description": "Envía un setpoint para manipular la consigna.",
+      "schedule_defaults": { "start_time": 2, "interval": 0, "count": 1 },
+      "parameters": [
+        { "name": "ioa", "type": "int", "label": "IOA", "default": 1 },
+        { "name": "value", "type": "float", "label": "Value", "default": 42 }
+      ],
+      "message_template": {
+        "type_id": 50,
+        "ioa": "{{ioa}}",
+        "cot": 6,
+        "value": "{{value}}"
+      }
+    },
+    {
+      "id": "iec104_read_command",
+      "protocol": "iec104",
+      "technique_id": "T0809",
+      "name": "Lectura puntual de IOA",
+      "description": "Lectura explícita de un IOA (C_RD_NA_1).",
+      "schedule_defaults": { "start_time": 1, "interval": 0, "count": 1 },
+      "parameters": [
+        { "name": "ioa", "type": "int", "label": "IOA", "default": 3 }
+      ],
+      "message_template": {
+        "type_id": 102,
+        "ioa": "{{ioa}}",
+        "cot": 6,
+        "value": ""
+      }
+    },
+    {
+      "id": "iec104_clock_sync",
+      "protocol": "iec104",
+      "technique_id": "T0809",
+      "name": "Sincronización de reloj",
+      "description": "Envía sincronización de reloj (C_CS_NA_1).",
+      "schedule_defaults": { "start_time": 1, "interval": 0, "count": 1 },
+      "parameters": [],
+      "message_template": {
+        "type_id": 103,
+        "ioa": 0,
+        "cot": 6,
+        "value": ""
+      }
+    },
+    {
+      "id": "iec104_interrogation_flood",
+      "protocol": "iec104",
+      "technique_id": "T0814",
+      "name": "Interrogación intensiva",
+      "description": "Solicita datos de forma recurrente para degradar el servicio.",
+      "schedule_defaults": { "start_time": 0, "interval": 1, "count": 5 },
+      "parameters": [],
+      "message_template": {
+        "type_id": 100,
+        "ioa": 0,
+        "cot": 6,
+        "value": ""
+      }
+    },
+    {
+      "id": "iec104_counter_interrogation",
+      "protocol": "iec104",
+      "technique_id": "T0809",
+      "name": "Counter interrogation",
+      "description": "Consulta de contadores (C_CI_NA_1).",
+      "schedule_defaults": { "start_time": 1, "interval": 0, "count": 1 },
+      "parameters": [],
+      "message_template": {
+        "type_id": 101,
+        "ioa": 0,
+        "cot": 6,
+        "value": ""
+      }
+    },
+    {
+      "id": "iec104_test_command",
+      "protocol": "iec104",
+      "technique_id": "T0809",
+      "name": "Test command",
+      "description": "Comando de prueba (C_TS_NA_1).",
+      "schedule_defaults": { "start_time": 1, "interval": 0, "count": 1 },
+      "parameters": [],
+      "message_template": {
+        "type_id": 104,
+        "ioa": 0,
+        "cot": 6,
+        "value": ""
+      }
+    },
+    {
+      "id": "iec104_step_command",
+      "protocol": "iec104",
+      "technique_id": "T0831",
+      "name": "Step command",
+      "description": "Comando paso a paso (C_RC_NA_1).",
+      "schedule_defaults": { "start_time": 2, "interval": 0, "count": 1 },
+      "parameters": [
+        { "name": "ioa", "type": "int", "label": "IOA", "default": 1 },
+        { "name": "value", "type": "string", "label": "Value (up/down)", "default": "up" }
+      ],
+      "message_template": {
+        "type_id": 47,
+        "ioa": "{{ioa}}",
+        "cot": 6,
+        "value": "{{value}}"
+      }
+    },
+    {
+      "id": "iec104_setpoint_normal",
+      "protocol": "iec104",
+      "technique_id": "T0831",
+      "name": "Setpoint normalizado",
+      "description": "Setpoint normalizado (C_SE_NA_1).",
+      "schedule_defaults": { "start_time": 2, "interval": 0, "count": 1 },
+      "parameters": [
+        { "name": "ioa", "type": "int", "label": "IOA", "default": 1 },
+        { "name": "value", "type": "float", "label": "Value (-1..1)", "default": 0.5 }
+      ],
+      "message_template": {
+        "type_id": 48,
+        "ioa": "{{ioa}}",
+        "cot": 6,
+        "value": "{{value}}"
+      }
+    }
+  ]
+}

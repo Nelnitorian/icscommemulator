@@ -14,40 +14,42 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Status represents the current status of a running scenario
 type Status struct {
-	ElapsedSeconds int  `json:"elapsed_seconds"`
-	TotalSeconds   int  `json:"total_seconds"`
-	PcapSize       int64 `json:"pcap_size"`
-	Running        bool `json:"running"`
+	ElapsedSeconds int    `json:"elapsed_seconds"`
+	TotalSeconds   int    `json:"total_seconds"`
+	PcapSize       int64  `json:"pcap_size"`
+	Running        bool   `json:"running"`
 	Error          string `json:"error,omitempty"`
 }
 
-// Config holds the configuration for a scenario run
 type Config struct {
 	DockerComposePath string
 	SimulationTime    int
 	OutputFile        string
 	ConfigPath        string
+	NetworkEmulation  *NetworkEmulation
 }
 
-// Runner manages scenario execution with Docker Compose and network capture
+type NetworkEmulation struct {
+	RateLimitMBps     float64
+	PacketLossPercent float64
+}
+
 type Runner struct {
 	mu sync.RWMutex
-	
-	// Configuration
+
 	config *Config
-	
-	// State
-	isRunning     bool
-	startTime     *time.Time
-	ctx           context.Context
-	cancel        context.CancelFunc
-	
-	// Processes
-	tcpdumpCmd    *exec.Cmd
-	
-	// Paths
+
+	isRunning bool
+	startTime *time.Time
+	ctx       context.Context
+	cancel    context.CancelFunc
+
+	tcpdumpCmd      *exec.Cmd
+	networkPrepared bool
+	tcApplied       bool
+	tcInterface     string
+
 	filePath     string
 	configPath   string
 	outputFolder string
@@ -55,12 +57,10 @@ type Runner struct {
 }
 
 var (
-	// Global singleton instance
 	globalRunner *Runner
 	globalMutex  sync.Mutex
 )
 
-// NewRunner creates a new scenario runner
 func NewRunner() *Runner {
 	return &Runner{
 		outputFolder: "outputs",
@@ -68,117 +68,199 @@ func NewRunner() *Runner {
 	}
 }
 
-// GetGlobalRunner returns the global singleton runner instance
 func GetGlobalRunner() *Runner {
 	globalMutex.Lock()
 	defer globalMutex.Unlock()
-	
+
 	if globalRunner == nil {
 		globalRunner = NewRunner()
 	}
 	return globalRunner
 }
 
-// Configure sets up the runner with the provided configuration
-func (r *Runner) Configure(dockerComposePath string, simulationTime int, outputFile, configPath string) {
+func (r *Runner) Configure(dockerComposePath string, simulationTime int, outputFile, configPath string, networkEmulation *NetworkEmulation) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	if configPath == "" {
 		configPath = "/tmp/ICSCommEmulator"
 	}
-	
+
 	r.config = &Config{
 		DockerComposePath: dockerComposePath,
 		SimulationTime:    simulationTime,
 		OutputFile:        outputFile,
 		ConfigPath:        configPath,
+		NetworkEmulation:  networkEmulation,
 	}
-	
+
 	r.filePath = dockerComposePath
 	r.configPath = configPath
 	r.outputFile = filepath.Join(r.outputFolder, outputFile)
 }
 
-// IsRunning returns whether a scenario is currently running
 func (r *Runner) IsRunning() bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.isRunning
 }
 
-// GetDockerNetworkInterface extracts the network interface name from docker-compose file
 func (r *Runner) GetDockerNetworkInterface() (string, error) {
 	data, err := os.ReadFile(r.filePath)
 	if err != nil {
 		return "", fmt.Errorf("failed to read docker-compose file: %w", err)
 	}
-	
+
 	var compose struct {
 		Networks map[string]interface{} `yaml:"networks"`
 	}
-	
+
 	err = yaml.Unmarshal(data, &compose)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse docker-compose file: %w", err)
 	}
-	
+
 	for networkName := range compose.Networks {
 		return networkName, nil
 	}
-	
+
 	return "", fmt.Errorf("no networks found in docker-compose file")
 }
 
-// GetSystemInterfaceName gets the system interface name for a Docker network
+func (r *Runner) GetDockerNetworkConfig() (string, string, error) {
+	data, err := os.ReadFile(r.filePath)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to read docker-compose file: %w", err)
+	}
+
+	type ipamConfig struct {
+		Config []struct {
+			Subnet string `yaml:"subnet"`
+		} `yaml:"config"`
+	}
+	type networkConfig struct {
+		IPAM ipamConfig `yaml:"ipam"`
+	}
+	var compose struct {
+		Networks map[string]networkConfig `yaml:"networks"`
+	}
+
+	if err := yaml.Unmarshal(data, &compose); err != nil {
+		return "", "", fmt.Errorf("failed to parse docker-compose file: %w", err)
+	}
+
+	for name, cfg := range compose.Networks {
+		subnet := ""
+		if len(cfg.IPAM.Config) > 0 {
+			subnet = cfg.IPAM.Config[0].Subnet
+		}
+		return name, subnet, nil
+	}
+
+	return "", "", fmt.Errorf("no networks found in docker-compose file")
+}
+
+func (r *Runner) PrepareNetwork() (string, error) {
+	networkName, subnet, err := r.GetDockerNetworkConfig()
+	if err != nil {
+		return "", err
+	}
+	if subnet == "" {
+		return "", fmt.Errorf("no subnet found for network %s", networkName)
+	}
+
+	if err := exec.Command("docker", "network", "inspect", networkName).Run(); err != nil {
+		cmd := exec.Command("docker", "network", "create", "--driver", "bridge", "--subnet", subnet, networkName)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			return "", fmt.Errorf("failed to create docker network: %w\nOutput: %s", err, string(output))
+		}
+	}
+
+	r.networkPrepared = true
+	return r.GetSystemInterfaceName(networkName)
+}
+
+func (r *Runner) applyTrafficControl(interfaceName string) error {
+	if r.config == nil || r.config.NetworkEmulation == nil {
+		return nil
+	}
+
+	emulation := r.config.NetworkEmulation
+	if emulation.RateLimitMBps <= 0 && emulation.PacketLossPercent <= 0 {
+		return nil
+	}
+
+	args := []string{"qdisc", "replace", "dev", interfaceName, "root", "netem"}
+	if emulation.PacketLossPercent > 0 {
+		args = append(args, "loss", fmt.Sprintf("%.3f%%", emulation.PacketLossPercent))
+	}
+	if emulation.RateLimitMBps > 0 {
+		rateMbit := emulation.RateLimitMBps * 8
+		args = append(args, "rate", fmt.Sprintf("%.3fmbit", rateMbit))
+	}
+
+	cmd := exec.Command("tc", args...)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to apply traffic control: %w\nOutput: %s", err, string(output))
+	}
+
+	r.tcApplied = true
+	r.tcInterface = interfaceName
+	return nil
+}
+
+func (r *Runner) clearTrafficControl() {
+	if !r.tcApplied || r.tcInterface == "" {
+		return
+	}
+
+	cmd := exec.Command("tc", "qdisc", "del", "dev", r.tcInterface, "root")
+	_ = cmd.Run()
+
+	r.tcApplied = false
+	r.tcInterface = ""
+}
+
 func (r *Runner) GetSystemInterfaceName(dockerNetworkName string) (string, error) {
 
 	log.Printf("Looking for Docker network: %s", dockerNetworkName)
-    
-    // List all networks to debug
-    debugCmd := exec.Command("docker", "network", "ls")
-    debugOutput, _ := debugCmd.Output()
-    log.Printf("Available networks:\n%s", string(debugOutput))
 
-    // List all networks and filter by name pattern
-    cmd := exec.Command("docker", "network", "ls", "--filter", fmt.Sprintf("name=%s", dockerNetworkName), "--format", "{{.ID}}")
-    output, err := cmd.Output()
-    if err != nil {
-        return "", fmt.Errorf("failed to list docker networks: %w", err)
-    }
-    
-    lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-    if len(lines) == 0 || lines[0] == "" {
-        return "", fmt.Errorf("no network found matching: %s", dockerNetworkName)
-    }
-    
-    // Use the first matching network ID
-    networkID := strings.TrimSpace(lines[0])
-    if len(networkID) < 12 {
-        return "", fmt.Errorf("invalid network ID: %s", networkID)
-    }
-    
-    return fmt.Sprintf("br-%s", networkID[:12]), nil
+	debugCmd := exec.Command("docker", "network", "ls")
+	debugOutput, _ := debugCmd.Output()
+	log.Printf("Available networks:\n%s", string(debugOutput))
+
+	cmd := exec.Command("docker", "network", "ls", "--filter", fmt.Sprintf("name=%s", dockerNetworkName), "--format", "{{.ID}}")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to list docker networks: %w", err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	if len(lines) == 0 || lines[0] == "" {
+		return "", fmt.Errorf("no network found matching: %s", dockerNetworkName)
+	}
+
+	networkID := strings.TrimSpace(lines[0])
+	if len(networkID) < 12 {
+		return "", fmt.Errorf("invalid network ID: %s", networkID)
+	}
+
+	return fmt.Sprintf("br-%s", networkID[:12]), nil
 }
 
-// StartTcpdump starts network packet capture using tcpdump
 func (r *Runner) StartTcpdump(ctx context.Context, interfaceName string) error {
-	// Ensure output directory exists
 	err := os.MkdirAll(r.outputFolder, 0755)
 	if err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
-	// Build comprehensive tcpdump filter
-	// Filter strategy: capture only ICS protocol traffic, exclude all Docker/network noise
-	
 	filter := buildTcpdumpFilter()
-	
+
 	args := []string{
 		"-i", interfaceName,
 		"-w", r.outputFile,
-		"-U",  // Packet-buffered output
-		"-nn", // Don't resolve hostnames or port names
+		"-U",
+		"-nn",
 		filter,
 	}
 
@@ -188,7 +270,7 @@ func (r *Runner) StartTcpdump(ctx context.Context, interfaceName string) error {
 
 	log.Printf("Starting tcpdump on interface '%s', saving to '%s'", interfaceName, r.outputFile)
 	log.Printf("Filter: %s", filter)
-	
+
 	err = r.tcpdumpCmd.Start()
 	if err != nil {
 		return fmt.Errorf("failed to start tcpdump: %w", err)
@@ -197,89 +279,77 @@ func (r *Runner) StartTcpdump(ctx context.Context, interfaceName string) error {
 	return nil
 }
 
-// buildTcpdumpFilter creates a comprehensive filter for ICS protocols only
 func buildTcpdumpFilter() string {
-	// Include only ICS protocol traffic
-	// Modbus TCP: port 502
-	// DNP3: port 20000
-	// IEC 104: port 2404
-	
+	// Capture ICS traffic plus ARP/ICMP and drop common background noise.
 	icsProtocolPorts := "(tcp port 502 or tcp port 20000 or tcp port 2404 or arp or icmp)"
-	
-	// Exclude all noise protocols
+
 	excludeFilters := []string{
-		"not udp port 5353",     // mDNS (Multicast DNS)
-		"not udp port 1900",     // SSDP (Simple Service Discovery Protocol)
-		"not udp port 5355",     // LLMNR (Link-Local Multicast Name Resolution)
-		"not udp port 137",      // NetBIOS Name Service
-		"not udp port 138",      // NetBIOS Datagram Service
-		"not tcp port 139",      // NetBIOS Session Service
-		"not tcp port 445",      // SMB over TCP
-		"not udp port 546",      // DHCPv6 Client
-		"not udp port 547",      // DHCPv6 Server
-		"not ip6",               // Exclude all IPv6 (ICMPv6, etc.)
-		"not igmp",              // Exclude IGMP (multicast management)
+		"not udp port 5353",
+		"not udp port 1900",
+		"not udp port 5355",
+		"not udp port 137",
+		"not udp port 138",
+		"not tcp port 139",
+		"not tcp port 445",
+		"not udp port 546",
+		"not udp port 547",
+		"not ip6",
+		"not igmp",
 	}
-	
-	// Combine: include ICS ports AND exclude noise
+
 	filter := icsProtocolPorts
 	for _, exclude := range excludeFilters {
 		filter += " and " + exclude
 	}
-	
+
 	return filter
 }
 
-// LaunchDockerCompose starts the Docker Compose environment
 func (r *Runner) LaunchDockerCompose() error {
-	// Ensure the environment is clean before launching
-	err := r.EnsureLaunchable()
-	if err != nil {
-		log.Printf("Warning: failed to clean environment: %v", err)
+	if !r.networkPrepared {
+		err := r.EnsureLaunchable()
+		if err != nil {
+			log.Printf("Warning: failed to clean environment: %v", err)
+		}
 	}
-	
+
 	log.Println("Launching docker compose...")
-	
+
 	cmd := exec.Command("docker", "compose", "-f", r.filePath, "up", "--build", "-d", "--remove-orphans")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to launch docker compose: %w\nOutput: %s", err, string(output))
 	}
-	
+
 	log.Println("Docker compose launched successfully")
 	return nil
 }
 
-// EnsureLaunchable cleans up any existing network to ensure clean startup
 func (r *Runner) EnsureLaunchable() error {
 	networkName, err := r.GetDockerNetworkInterface()
 	if err != nil {
-		// If we can't get the network name, it's probably fine to continue
 		return nil
 	}
-	
-	// Try to remove existing network (ignore errors as it might not exist)
+
 	cmd := exec.Command("docker", "network", "rm", networkName)
 	cmd.Run() // Ignore output and errors
-	
+
 	return nil
 }
 
-// StopDockerCompose stops the Docker Compose environment
 func (r *Runner) StopDockerCompose() error {
 	log.Println("Stopping docker compose...")
-	
+
 	cmd := exec.Command("docker", "compose", "-f", r.filePath, "down", "--timeout", "3")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to stop docker compose: %w\nOutput: %s", err, string(output))
 	}
-	
+
 	log.Println("Docker compose stopped.")
 	return nil
 }
 
-// StopTcpdump stops the tcpdump process
 func (r *Runner) StopTcpdump() error {
 	if r.tcpdumpCmd != nil && r.tcpdumpCmd.Process != nil {
 		log.Println("Stopping tcpdump...")
@@ -287,8 +357,7 @@ func (r *Runner) StopTcpdump() error {
 		if err != nil {
 			return fmt.Errorf("failed to stop tcpdump: %w", err)
 		}
-		
-		// Wait for the process to finish
+
 		r.tcpdumpCmd.Wait()
 		log.Println("Tcpdump stopped.")
 	} else {
@@ -297,7 +366,6 @@ func (r *Runner) StopTcpdump() error {
 	return nil
 }
 
-// CleanConfigFolder removes the configuration directory
 func (r *Runner) CleanConfigFolder() error {
 	if _, err := os.Stat(r.configPath); err == nil {
 		return os.RemoveAll(r.configPath)
@@ -305,7 +373,6 @@ func (r *Runner) CleanConfigFolder() error {
 	return nil
 }
 
-// Run executes the complete scenario
 func (r *Runner) Run() error {
 	r.mu.Lock()
 	if r.isRunning {
@@ -313,11 +380,9 @@ func (r *Runner) Run() error {
 		return fmt.Errorf("another scenario is already running")
 	}
 	r.isRunning = true
-	now := time.Now()
-	r.startTime = &now
 	r.ctx, r.cancel = context.WithCancel(context.Background())
 	r.mu.Unlock()
-	
+
 	defer func() {
 		r.mu.Lock()
 		r.isRunning = false
@@ -327,69 +392,91 @@ func (r *Runner) Run() error {
 		}
 		r.mu.Unlock()
 	}()
-	
-	// Launch Docker Compose
-	err := r.LaunchDockerCompose()
+
+	systemInterface, err := r.PrepareNetwork()
+	prepared := err == nil
+	if err != nil {
+		log.Printf("Warning: failed to prepare network early capture: %v", err)
+	}
+
+	if prepared {
+		if err := r.applyTrafficControl(systemInterface); err != nil {
+			return err
+		}
+		if err := r.StartTcpdump(r.ctx, systemInterface); err != nil {
+			return fmt.Errorf("failed to start tcpdump: %w", err)
+		}
+	}
+
+	err = r.LaunchDockerCompose()
 	if err != nil {
 		r.StopDockerCompose()
 		return fmt.Errorf("failed to launch docker compose: %w", err)
 	}
-	
+
 	defer func() {
 		r.StopDockerCompose()
+		r.clearTrafficControl()
 		r.CleanConfigFolder()
 	}()
-	
-	// Get network interface
-	networkName, err := r.GetDockerNetworkInterface()
-	if err != nil {
-		return fmt.Errorf("failed to get docker network interface: %w", err)
+
+	if !prepared {
+		networkName, err := r.GetDockerNetworkInterface()
+		if err != nil {
+			return fmt.Errorf("failed to get docker network interface: %w", err)
+		}
+
+		systemInterface, err = r.GetSystemInterfaceName(networkName)
+		if err != nil {
+			return fmt.Errorf("failed to get system interface name: %w", err)
+		}
+
+		if err := r.applyTrafficControl(systemInterface); err != nil {
+			return err
+		}
+
+		err = r.StartTcpdump(r.ctx, systemInterface)
+		if err != nil {
+			return fmt.Errorf("failed to start tcpdump: %w", err)
+		}
 	}
-	
-	systemInterface, err := r.GetSystemInterfaceName(networkName)
-	if err != nil {
-		return fmt.Errorf("failed to get system interface name: %w", err)
-	}
-	
-	// Start tcpdump
-	err = r.StartTcpdump(r.ctx, systemInterface)
-	if err != nil {
-		return fmt.Errorf("failed to start tcpdump: %w", err)
-	}
-	
+
+	r.mu.Lock()
+	now := time.Now()
+	r.startTime = &now
+	r.mu.Unlock()
+
 	defer r.StopTcpdump()
-	
-	// Wait for simulation time + 1 second
+
 	select {
 	case <-time.After(time.Duration(r.config.SimulationTime+1) * time.Second):
 		log.Println("Simulation completed")
 	case <-r.ctx.Done():
 		log.Println("Simulation cancelled")
 	}
-	
+
 	log.Println("Stopping network traffic capture...")
 	return nil
 }
 
-// Status returns the current status of the scenario
 func (r *Runner) Status() Status {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	
+
 	if r.startTime == nil || !r.isRunning {
 		return Status{
 			Error: "Simulation not started.",
 		}
 	}
-	
+
 	elapsed := time.Since(*r.startTime)
 	elapsedSeconds := int(elapsed.Seconds())
-	
+
 	var pcapSize int64
 	if info, err := os.Stat(r.outputFile); err == nil {
 		pcapSize = info.Size()
 	}
-	
+
 	return Status{
 		ElapsedSeconds: elapsedSeconds,
 		TotalSeconds:   r.config.SimulationTime,
@@ -398,82 +485,74 @@ func (r *Runner) Status() Status {
 	}
 }
 
-// Stop forcefully stops the current scenario
 func (r *Runner) Stop() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	if !r.isRunning {
 		return fmt.Errorf("no scenario is running")
 	}
-	
+
 	if r.cancel != nil {
 		r.cancel()
 	}
-	
-	// Stop processes
+
 	if err := r.StopTcpdump(); err != nil {
 		log.Printf("Error stopping tcpdump: %v", err)
 	}
-	
+
 	if err := r.StopDockerCompose(); err != nil {
 		log.Printf("Error stopping docker compose: %v", err)
 	}
 
+	r.clearTrafficControl()
+
 	if err := r.CleanConfigFolder(); err != nil {
 		log.Printf("Error cleaning config folder: %v", err)
 	}
-	
+
 	return nil
 }
 
-// Package-level functions for convenience (equivalent to Python's global functions)
-
-// Start starts a new scenario with the given parameters
 func Start(dockerComposePath string, simulationTime int, outputFile, configPath string) (string, error) {
 	runner := GetGlobalRunner()
-	
+
 	if runner.IsRunning() {
 		return "", fmt.Errorf("a scenario is already running")
 	}
-	
-	runner.Configure(dockerComposePath, simulationTime, outputFile, configPath)
-	
-	// Start in goroutine (equivalent to Python's threading)
+
+	runner.Configure(dockerComposePath, simulationTime, outputFile, configPath, nil)
+
 	go func() {
 		if err := runner.Run(); err != nil {
 			log.Printf("Error running scenario: %v", err)
 		}
 	}()
-	
-	// Return absolute path to output file
+
 	absPath, err := filepath.Abs(runner.outputFile)
 	if err != nil {
 		return runner.outputFile, nil // Return relative path if absolute fails
 	}
-	
+
 	return absPath, nil
 }
 
-// Stop stops the currently running scenario
 func Stop() error {
 	runner := GetGlobalRunner()
 	return runner.Stop()
 }
 
-// GetStatus returns the status of the currently running scenario
 func GetStatus() Status {
 	runner := GetGlobalRunner()
 	return runner.Status()
 }
 
-// Example usage function (equivalent to the Python __main__ block)
 func ExampleUsage() error {
 	outputPath, err := Start("docker-compose.yml", 10, "output.pcap", "")
 	if err != nil {
 		return err
 	}
-	
+
 	log.Printf("Scenario started, output will be saved to: %s", outputPath)
 	return nil
 }

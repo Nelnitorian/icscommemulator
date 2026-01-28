@@ -63,13 +63,13 @@ func TestCraftMaster_Modbus(t *testing.T) {
 
 	messages := []Message{
 		{
-			Timestamp:    "0",
+			Timestamp:    0,
 			Recurrent:    true,
 			Interval:     5,
 			IP:           "192.168.1.20",
 			Port:         502,
 			SlaveID:      1,
-			FunctionCode: "3",
+			FunctionCode: 3,
 			StartAddress: 0,
 			Count:        10,
 			Values:       []interface{}{},
@@ -81,22 +81,24 @@ func TestCraftMaster_Modbus(t *testing.T) {
 		t.Fatalf("CraftMaster() error = %v", err)
 	}
 
-	csvPath := filepath.Join(tmpDir, "masters", "0", "master.csv")
-	if _, err := os.Stat(csvPath); os.IsNotExist(err) {
-		t.Errorf("Master CSV file was not created at %s", csvPath)
+	yamlPath := filepath.Join(tmpDir, "masters", "0", "master.yaml")
+	if _, err := os.Stat(yamlPath); os.IsNotExist(err) {
+		t.Errorf("Master YAML file was not created at %s", yamlPath)
 	}
 
-	content, err := os.ReadFile(csvPath)
+	content, err := os.ReadFile(yamlPath)
 	if err != nil {
-		t.Fatalf("Failed to read CSV file: %v", err)
+		t.Fatalf("Failed to read YAML file: %v", err)
 	}
-
-	contentStr := string(content)
-	if !contains(contentStr, "timestamp") {
-		t.Error("CSV missing header 'timestamp'")
+	var cfg MasterConfig
+	if err := yaml.Unmarshal(content, &cfg); err != nil {
+		t.Fatalf("Failed to parse YAML: %v", err)
 	}
-	if !contains(contentStr, "function_code") {
-		t.Error("CSV missing header 'function_code'")
+	if cfg.Protocol != "modbus" {
+		t.Errorf("Expected protocol modbus, got %s", cfg.Protocol)
+	}
+	if len(cfg.Messages) != 1 {
+		t.Errorf("Expected 1 message, got %d", len(cfg.Messages))
 	}
 }
 
@@ -112,7 +114,7 @@ func TestCraftMaster_DNP3(t *testing.T) {
 
 	messages := []Message{
 		{
-			Timestamp:     "0",
+			Timestamp:     0,
 			Recurrent:     true,
 			Interval:      5,
 			IP:            "192.168.2.20",
@@ -131,18 +133,17 @@ func TestCraftMaster_DNP3(t *testing.T) {
 		t.Fatalf("CraftMaster() error = %v", err)
 	}
 
-	csvPath := filepath.Join(tmpDir, "masters", "0", "master.csv")
-	content, err := os.ReadFile(csvPath)
+	yamlPath := filepath.Join(tmpDir, "masters", "0", "master.yaml")
+	content, err := os.ReadFile(yamlPath)
 	if err != nil {
-		t.Fatalf("Failed to read CSV file: %v", err)
+		t.Fatalf("Failed to read YAML file: %v", err)
 	}
-
-	contentStr := string(content)
-	if !contains(contentStr, "operation_type") {
-		t.Error("DNP3 CSV missing header 'operation_type'")
+	var cfg MasterConfig
+	if err := yaml.Unmarshal(content, &cfg); err != nil {
+		t.Fatalf("Failed to parse YAML: %v", err)
 	}
-	if !contains(contentStr, "outstation_id") {
-		t.Error("DNP3 CSV missing header 'outstation_id'")
+	if cfg.Protocol != "dnp3" {
+		t.Errorf("Expected protocol dnp3, got %s", cfg.Protocol)
 	}
 }
 
@@ -158,7 +159,7 @@ func TestCraftMaster_IEC104(t *testing.T) {
 
 	messages := []Message{
 		{
-			Timestamp:     "0",
+			Timestamp:     0,
 			Recurrent:     true,
 			Interval:      5,
 			IP:            "192.168.3.20",
@@ -176,18 +177,17 @@ func TestCraftMaster_IEC104(t *testing.T) {
 		t.Fatalf("CraftMaster() error = %v", err)
 	}
 
-	csvPath := filepath.Join(tmpDir, "masters", "0", "master.csv")
-	content, err := os.ReadFile(csvPath)
+	yamlPath := filepath.Join(tmpDir, "masters", "0", "master.yaml")
+	content, err := os.ReadFile(yamlPath)
 	if err != nil {
-		t.Fatalf("Failed to read CSV file: %v", err)
+		t.Fatalf("Failed to read YAML file: %v", err)
 	}
-
-	contentStr := string(content)
-	if !contains(contentStr, "type_id") {
-		t.Error("IEC104 CSV missing header 'type_id'")
+	var cfg MasterConfig
+	if err := yaml.Unmarshal(content, &cfg); err != nil {
+		t.Fatalf("Failed to parse YAML: %v", err)
 	}
-	if !contains(contentStr, "common_address") {
-		t.Error("IEC104 CSV missing header 'common_address'")
+	if cfg.Protocol != "iec104" {
+		t.Errorf("Expected protocol iec104, got %s", cfg.Protocol)
 	}
 }
 
@@ -206,9 +206,9 @@ func TestCraftMaster_EmptyMessages(t *testing.T) {
 		t.Fatalf("CraftMaster() with empty messages error = %v", err)
 	}
 
-	csvPath := filepath.Join(tmpDir, "masters", "0", "master.csv")
-	if _, err := os.Stat(csvPath); os.IsNotExist(err) {
-		t.Errorf("Empty master CSV file was not created")
+	yamlPath := filepath.Join(tmpDir, "masters", "0", "master.yaml")
+	if _, err := os.Stat(yamlPath); os.IsNotExist(err) {
+		t.Errorf("Empty master YAML file was not created")
 	}
 }
 
@@ -254,17 +254,15 @@ func TestCraftSlave_Modbus(t *testing.T) {
 		t.Fatalf("Failed to parse YAML: %v", err)
 	}
 
-	// Verify unwanted fields are removed
-	unwantedFields := []string{"comment", "label", "role", "name", "id"}
-	for _, field := range unwantedFields {
-		if _, exists := result[field]; exists {
-			t.Errorf("Unwanted field '%s' found in slave YAML", field)
-		}
+	if result["protocol"] != "modbus" {
+		t.Errorf("Expected protocol modbus, got %v", result["protocol"])
 	}
-
-	// Verify expected fields are present
-	if _, exists := result["ip"]; !exists {
-		t.Error("Expected field 'ip' not found in slave YAML")
+	node, ok := result["node"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("Expected node section in slave YAML")
+	}
+	if _, exists := node["ip"]; !exists {
+		t.Error("Expected field 'ip' not found in node config")
 	}
 }
 
@@ -290,6 +288,18 @@ func TestCraftSlave_DNP3(t *testing.T) {
 				{"index": 0, "value": 100.0},
 			},
 		},
+		AnalogOutputStatus: map[string]interface{}{
+			"count": 10,
+			"initial_values": []map[string]interface{}{
+				{"index": 0, "value": 50.0},
+			},
+		},
+		BinaryOutputStatus: map[string]interface{}{
+			"count": 10,
+			"initial_values": []map[string]interface{}{
+				{"index": 0, "value": true},
+			},
+		},
 	}
 
 	err := gen.CraftSlave(slave, 0)
@@ -309,11 +319,24 @@ func TestCraftSlave_DNP3(t *testing.T) {
 		t.Fatalf("Failed to parse YAML: %v", err)
 	}
 
-	if _, exists := result["outstation_id"]; !exists {
+	if result["protocol"] != "dnp3" {
+		t.Errorf("Expected protocol dnp3, got %v", result["protocol"])
+	}
+	node, ok := result["node"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("Expected node section in slave YAML")
+	}
+	if _, exists := node["outstation_id"]; !exists {
 		t.Error("Expected DNP3 field 'outstation_id' not found")
 	}
-	if _, exists := result["analog_inputs"]; !exists {
+	if _, exists := node["analog_inputs"]; !exists {
 		t.Error("Expected DNP3 field 'analog_inputs' not found")
+	}
+	if _, exists := node["analog_output_status"]; !exists {
+		t.Error("Expected DNP3 field 'analog_output_status' not found")
+	}
+	if _, exists := node["binary_output_status"]; !exists {
+		t.Error("Expected DNP3 field 'binary_output_status' not found")
 	}
 }
 
@@ -336,10 +359,16 @@ func TestCraftSlave_IEC104(t *testing.T) {
 		T2:            10,
 		T3:            20,
 		SinglePoints: map[string]interface{}{
-			"type":      "sequential",
-			"start_ioa": 1001,
-			"values":    []int{1, 0, 1, 0},
-			"type_id":   "M_SP_NA_1",
+			"1001": map[string]interface{}{
+				"ioa":       1001,
+				"value":     true,
+				"report_ms": 0,
+			},
+			"1002": map[string]interface{}{
+				"ioa":       1002,
+				"value":     false,
+				"report_ms": 5000,
+			},
 		},
 	}
 
@@ -360,11 +389,23 @@ func TestCraftSlave_IEC104(t *testing.T) {
 		t.Fatalf("Failed to parse YAML: %v", err)
 	}
 
-	if _, exists := result["common_address"]; !exists {
-		t.Error("Expected IEC104 field 'common_address' not found")
+	if result["protocol"] != "iec104" {
+		t.Errorf("Expected protocol iec104, got %v", result["protocol"])
 	}
-	if _, exists := result["single_points"]; !exists {
-		t.Error("Expected IEC104 field 'single_points' not found")
+	node, ok := result["node"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("Expected node section in slave YAML")
+	}
+	stations, ok := node["stations"].([]interface{})
+	if !ok || len(stations) == 0 {
+		t.Fatalf("Expected stations in IEC104 node config")
+	}
+	station, ok := stations[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("Expected station to be a map")
+	}
+	if _, exists := station["common_address"]; !exists {
+		t.Error("Expected IEC104 field 'common_address' not found in station")
 	}
 }
 
@@ -378,13 +419,13 @@ func TestGenerate_FullScenario(t *testing.T) {
 				Role: "master",
 				Messages: []Message{
 					{
-						Timestamp:    "0",
+						Timestamp:    0,
 						Recurrent:    true,
 						Interval:     5,
 						IP:           "192.168.1.20",
 						Port:         502,
 						SlaveID:      1,
-						FunctionCode: "3",
+						FunctionCode: 3,
 						StartAddress: 0,
 						Count:        10,
 					},
@@ -411,9 +452,9 @@ func TestGenerate_FullScenario(t *testing.T) {
 	}
 
 	// Verify master config was created
-	masterCSV := filepath.Join(tmpDir, "masters", "0", "master.csv")
-	if _, err := os.Stat(masterCSV); os.IsNotExist(err) {
-		t.Error("Master CSV was not created")
+	masterYAML := filepath.Join(tmpDir, "masters", "0", "master.yaml")
+	if _, err := os.Stat(masterYAML); os.IsNotExist(err) {
+		t.Error("Master YAML was not created")
 	}
 
 	// Verify slave config was created
@@ -527,18 +568,3 @@ func TestGetSlaveCount(t *testing.T) {
 }
 
 // Helper function
-func contains(s, substr string) bool {
-	return len(s) > 0 && len(substr) > 0 && 
-		(s == substr || len(s) >= len(substr) && 
-		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || 
-		findSubstring(s, substr)))
-}
-
-func findSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"icscommemulator/pkg/logger"
@@ -13,7 +15,6 @@ import (
 	"icscommemulator/pkg/service"
 )
 
-// Server representa el servidor HTTP con sus dependencias
 type Server struct {
 	host       string
 	port       int
@@ -21,42 +22,41 @@ type Server struct {
 	handlers   *Handlers
 	templates  *template.Template
 	staticPath string
+	corsAllowedOrigins map[string]struct{}
 }
 
-// NewServer crea una nueva instancia del servidor con dependency injection
 func NewServer(host string, port int) (*Server, error) {
 	server := &Server{
 		host:       host,
 		port:       port,
 		staticPath: "web/static",
+		corsAllowedOrigins: loadCorsAllowedOrigins(),
 	}
 
-	// Cargar templates
 	if err := server.loadTemplates(); err != nil {
 		return nil, fmt.Errorf("failed to load templates: %w", err)
 	}
 
-	// Crear dependencias
 	scenarioStorage := scenario.NewStorage()
 	runnerSvc := runner.NewService()
 
-	// Crear servicio de escenarios (unifica toda la lógica)
-	scenarioSvc := service.NewScenarioService("/tmp/ICSCommEmulator", runnerSvc)
+	// Per-user work dir avoids collisions across system users.
+	workDir := fmt.Sprintf("/tmp/ICSCommEmulator-%d", os.Getuid())
+	scenarioSvc := service.NewScenarioService(workDir, runnerSvc)
 
-	// Handlers ahora solo reciben storage y servicio
 	server.handlers = NewHandlers(scenarioStorage, scenarioSvc)
 
-	// Configurar rutas
 	mux := http.NewServeMux()
 	server.setupRoutes(mux)
 
-	// Configurar servidor HTTP
 	server.httpServer = &http.Server{
 		Addr:         fmt.Sprintf("%s:%d", host, port),
 		Handler:      server.loggingMiddleware(server.corsMiddleware(mux)),
 		ReadTimeout:  15 * time.Second,
+		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
+		MaxHeaderBytes: 1 << 20,
 	}
 
 	return server, nil
@@ -79,15 +79,30 @@ func (s *Server) loadTemplates() error {
 	return nil
 }
 
+func loadCorsAllowedOrigins() map[string]struct{} {
+	originsEnv := strings.TrimSpace(os.Getenv("CORS_ALLOW_ORIGINS"))
+	if originsEnv == "" {
+		return map[string]struct{}{}
+	}
+
+	entries := strings.Split(originsEnv, ",")
+	allowed := make(map[string]struct{}, len(entries))
+	for _, entry := range entries {
+		origin := strings.TrimSpace(entry)
+		if origin != "" {
+			allowed[origin] = struct{}{}
+		}
+	}
+
+	return allowed
+}
+
 func (s *Server) setupRoutes(mux *http.ServeMux) {
-	// Static files
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(s.staticPath))))
 
-	// API routes
 	mux.HandleFunc("/api/networks/", s.handlers.HandleNetworks)
 	mux.HandleFunc("/api/run", s.handlers.HandleRun)
 
-	// Web pages
 	mux.HandleFunc("/", s.handleHome)
 	mux.HandleFunc("/index.html", s.handleHome)
 	mux.HandleFunc("/networks/", s.handleNetworkPage)
@@ -104,7 +119,6 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	return s.httpServer.Shutdown(ctx)
 }
 
-// Handlers HTTP para páginas web
 func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" && r.URL.Path != "/index.html" {
 		http.NotFound(w, r)

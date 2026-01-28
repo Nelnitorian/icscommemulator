@@ -6,21 +6,22 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
 
 // Service represents a Docker Compose service configuration
 type Service struct {
-	Build       *BuildConfig          `yaml:"build,omitempty"`
-	Image       string                `yaml:"image,omitempty"`
-	Container   string                `yaml:"container_name,omitempty"`
-	Volumes     []string              `yaml:"volumes,omitempty"`
+	Build       *BuildConfig           `yaml:"build,omitempty"`
+	Image       string                 `yaml:"image,omitempty"`
+	Container   string                 `yaml:"container_name,omitempty"`
+	Volumes     []string               `yaml:"volumes,omitempty"`
 	Networks    map[string]NetworkSpec `yaml:"networks,omitempty"`
-	Environment []string              `yaml:"environment,omitempty"`
-	Expose      []string              `yaml:"expose,omitempty"`
-	HealthCheck *HealthCheck          `yaml:"healthcheck,omitempty"`
-	DependsOn   map[string]Dependency `yaml:"depends_on,omitempty"`
+	Environment []string               `yaml:"environment,omitempty"`
+	Expose      []string               `yaml:"expose,omitempty"`
+	HealthCheck *HealthCheck           `yaml:"healthcheck,omitempty"`
+	DependsOn   map[string]Dependency  `yaml:"depends_on,omitempty"`
 }
 
 // BuildConfig represents the build configuration for a service
@@ -50,8 +51,10 @@ type Dependency struct {
 
 // NetworkConfig represents a Docker network configuration
 type NetworkConfig struct {
-	Driver string              `yaml:"driver"`
-	IPAM   IPAMConfig          `yaml:"ipam"`
+	Name     string     `yaml:"name,omitempty"`
+	Driver   string     `yaml:"driver"`
+	IPAM     IPAMConfig `yaml:"ipam"`
+	External bool       `yaml:"external,omitempty"`
 }
 
 // IPAMConfig represents IP Address Management configuration
@@ -94,7 +97,9 @@ func NewGenerator(configPath, protocol string) *Generator {
 // AddNetwork adds a network configuration to the Docker Compose
 func (g *Generator) AddNetwork(name, subnet string) {
 	g.compose.Networks[name] = NetworkConfig{
-		Driver: "bridge",
+		Name:     name,
+		Driver:   "bridge",
+		External: true,
 		IPAM: IPAMConfig{
 			Config: []IPAMSubnetConfig{
 				{Subnet: subnet},
@@ -105,117 +110,134 @@ func (g *Generator) AddNetwork(name, subnet string) {
 
 // getProtocolDockerfiles returns the Dockerfile paths for master and slave based on protocol
 func (g *Generator) getProtocolDockerfiles() (string, string) {
-    switch g.protocol {
-    case "modbus":
-        return "./protocols/modbus/master/Dockerfile.master", "./protocols/modbus/slave/Dockerfile.slave"
-    case "dnp3":
-        return "./protocols/dnp3/master/Dockerfile.master", "./protocols/dnp3/slave/Dockerfile.slave"
-    case "iec104":
-        return "./protocols/iec104/master/Dockerfile.master", "./protocols/iec104/slave/Dockerfile.slave"
-    default:
-        return "", ""
+	switch g.protocol {
+	case "modbus":
+		return "./protocols/modbus/master/Dockerfile.master", "./protocols/modbus/slave/Dockerfile.slave"
+	case "dnp3":
+		return "./protocols/dnp3/master/Dockerfile.master", "./protocols/dnp3/slave/Dockerfile.slave"
+	case "iec104":
+		return "./protocols/iec104/master/Dockerfile.master", "./protocols/iec104/slave/Dockerfile.slave"
+	default:
+		return "", ""
 	}
 }
 
 // AddMasterService adds a master service to the Docker Compose
-func (g *Generator) AddMasterService(index int, ip, networkName string) error {
-    // masterDockerfile, _ := g.getProtocolDockerfiles()
-    
-    serviceName := fmt.Sprintf("master_%d", index)
-    configVolume := fmt.Sprintf("%s/masters/%d:/app/config", g.configPath, index)
+func (g *Generator) AddMasterService(index int, ip, networkName string, dependencies []string) error {
+	// masterDockerfile, _ := g.getProtocolDockerfiles()
 
-    // Context should be the directory containing the Dockerfile
-    buildContext := fmt.Sprintf("./protocols/%s/master", g.protocol)
-    
-    service := Service{
-        Build: &BuildConfig{
-            Context:    buildContext,
-            Dockerfile: "Dockerfile.master",  // Relative to context
-        },
-        Container: serviceName,
-        Volumes:   []string{configVolume},
-        Networks: map[string]NetworkSpec{
-            networkName: {IPv4Address: ip},
-        },
-    }
+	serviceName := fmt.Sprintf("master_%d", index)
+	configVolume := fmt.Sprintf("%s/masters/%d:/app/config", g.configPath, index)
 
-    // Protocol-specific environment variables or configurations
-    switch g.protocol {
-    case "modbus":
-        service.Environment = []string{"PROTOCOL=modbus"}
-    case "dnp3":
-        service.Environment = []string{"PROTOCOL=dnp3", "LOGLEVEL=INFO"}
-    case "iec104":
-        service.Environment = []string{"PROTOCOL=iec104", "LOGLEVEL=INFO"}
-    }
+	// Context should include protocol assets (DNP3 needs repo root for lib/)
+	buildContext := fmt.Sprintf("./protocols/%s/master", g.protocol)
+	dockerfile := "Dockerfile.master"
+	if g.protocol == "dnp3" {
+		buildContext = "."
+		dockerfile = "protocols/dnp3/master/Dockerfile.master"
+	}
 
-    g.compose.Services[serviceName] = service
-    return nil
+	service := Service{
+		Build: &BuildConfig{
+			Context:    buildContext,
+			Dockerfile: dockerfile, // Relative to context
+		},
+		Container: serviceName,
+		Volumes:   []string{configVolume},
+		Networks: map[string]NetworkSpec{
+			networkName: {IPv4Address: ip},
+		},
+	}
+
+	// Protocol-specific environment variables or configurations
+	switch g.protocol {
+	case "modbus":
+		service.Environment = []string{"PROTOCOL=modbus"}
+	case "dnp3":
+		service.Environment = []string{"PROTOCOL=dnp3", "LOGLEVEL=INFO"}
+	case "iec104":
+		service.Environment = []string{"PROTOCOL=iec104", "LOGLEVEL=INFO"}
+	}
+
+	// Add dependencies if provided
+	if len(dependencies) > 0 {
+		service.DependsOn = make(map[string]Dependency)
+		for _, dep := range dependencies {
+			service.DependsOn[dep] = Dependency{Condition: "service_started"}
+		}
+	}
+
+	g.compose.Services[serviceName] = service
+	return nil
 }
 
 // AddSlaveService adds a slave service to the Docker Compose
 func (g *Generator) AddSlaveService(index int, ip, networkName string, port int, dependencies []string) error {
-    // _, slaveDockerfile := g.getProtocolDockerfiles()
-    
-    serviceName := fmt.Sprintf("slave_%d", index)
-    configVolume := fmt.Sprintf("%s/slaves/%d:/app/config", g.configPath, index)
+	// _, slaveDockerfile := g.getProtocolDockerfiles()
 
-    // Context should be the directory containing the Dockerfile
-    buildContext := fmt.Sprintf("./protocols/%s/slave", g.protocol)
+	serviceName := fmt.Sprintf("slave_%d", index)
+	configVolume := fmt.Sprintf("%s/slaves/%d:/app/config", g.configPath, index)
 
-    service := Service{
-        Build: &BuildConfig{
-            Context:    buildContext,
-            Dockerfile: "Dockerfile.slave",  // Relative to context
-        },
-        Container: serviceName,
-        Volumes:   []string{configVolume},
-        Networks: map[string]NetworkSpec{
-            networkName: {IPv4Address: ip},
-        },
-        Expose: []string{fmt.Sprintf("%d", port)},
-    }
+	// Context should include protocol assets (DNP3 needs repo root for lib/)
+	buildContext := fmt.Sprintf("./protocols/%s/slave", g.protocol)
+	dockerfile := "Dockerfile.slave"
+	if g.protocol == "dnp3" {
+		buildContext = "."
+		dockerfile = "protocols/dnp3/slave/Dockerfile.slave"
+	}
 
-    // Protocol-specific configurations
-    switch g.protocol {
-    case "modbus":
-        service.Environment = []string{"PROTOCOL=modbus"}
-        service.HealthCheck = &HealthCheck{
-            Test:     []string{"CMD-SHELL", fmt.Sprintf("nc -zv localhost %d || exit 1", port)},
-            Interval: "10s",
-            Timeout:  "5s",
-            Retries:  3,
-        }
-    case "dnp3":
-        service.Environment = []string{"PROTOCOL=dnp3", "LOGLEVEL=INFO"}
-        service.HealthCheck = &HealthCheck{
-            Test:     []string{"CMD-SHELL", fmt.Sprintf("nc -zv localhost %d || exit 1", port)},
-            Interval: "10s",
-            Timeout:  "5s",
-            Retries:  3,
-        }
-    case "iec104":
-        service.Environment = []string{"PROTOCOL=iec104", "LOGLEVEL=INFO"}
-        service.HealthCheck = &HealthCheck{
-            Test:     []string{"CMD-SHELL", fmt.Sprintf("nc -zv localhost %d || exit 1", port)},
-            Interval: "10s",
-            Timeout:  "5s",
-            Retries:  3,
-        }
-    }
+	service := Service{
+		Build: &BuildConfig{
+			Context:    buildContext,
+			Dockerfile: dockerfile, // Relative to context
+		},
+		Container: serviceName,
+		Volumes:   []string{configVolume},
+		Networks: map[string]NetworkSpec{
+			networkName: {IPv4Address: ip},
+		},
+		Expose: []string{fmt.Sprintf("%d", port)},
+	}
 
-    // Add dependencies if provided
-    if len(dependencies) > 0 {
-        service.DependsOn = make(map[string]Dependency)
-        for _, dep := range dependencies {
-            service.DependsOn[dep] = Dependency{Condition: "service_healthy"}
-        }
-    }
+	// Protocol-specific configurations
+	switch g.protocol {
+	case "modbus":
+		service.Environment = []string{"PROTOCOL=modbus"}
+		service.HealthCheck = &HealthCheck{
+			Test:     []string{"CMD", "/app/healthcheck", "127.0.0.1", fmt.Sprintf("%d", port)},
+			Interval: "10s",
+			Timeout:  "5s",
+			Retries:  3,
+		}
+	case "dnp3":
+		service.Environment = []string{"PROTOCOL=dnp3", "LOGLEVEL=INFO"}
+		service.HealthCheck = &HealthCheck{
+			Test:     []string{"CMD-SHELL", fmt.Sprintf("nc -zv localhost %d || exit 1", port)},
+			Interval: "10s",
+			Timeout:  "5s",
+			Retries:  3,
+		}
+	case "iec104":
+		service.Environment = []string{"PROTOCOL=iec104", "LOGLEVEL=INFO"}
+		service.HealthCheck = &HealthCheck{
+			Test:     []string{"CMD", "/app/healthcheck", "127.0.0.1", fmt.Sprintf("%d", port)},
+			Interval: "10s",
+			Timeout:  "5s",
+			Retries:  3,
+		}
+	}
 
-    g.compose.Services[serviceName] = service
-    return nil
+	// Add dependencies if provided
+	if len(dependencies) > 0 {
+		service.DependsOn = make(map[string]Dependency)
+		for _, dep := range dependencies {
+			service.DependsOn[dep] = Dependency{Condition: "service_started"}
+		}
+	}
+
+	g.compose.Services[serviceName] = service
+	return nil
 }
-
 
 // Generate creates the Docker Compose YAML file
 func (g *Generator) Generate(outputPath string) error {
@@ -318,56 +340,94 @@ func GenerateFromScenario(scenarioPath, configPath, outputPath, protocol string)
 	generator := NewGenerator(configPath, protocol)
 
 	// Add network
-	networkName := "ics_network"
+	networkName := buildNetworkName(scenario.IPNetwork)
+	if existing, err := findExistingNetworkBySubnet(scenario.IPNetwork); err == nil && existing != "" {
+		networkName = existing
+	}
 	generator.AddNetwork(networkName, scenario.IPNetwork)
 
 	// Track slaves for dependencies
 	var slaveServices []string
 
-	// Add services
-	masterIndex := 0
+	// Add slaves first so masters can depend on them
 	slaveIndex := 0
-
 	for _, node := range scenario.Nodes {
-		if node.Role == "master" {
-			err := generator.AddMasterService(masterIndex, node.IP, networkName)
-			if err != nil {
-				return fmt.Errorf("failed to add master service: %w", err)
-			}
-			masterIndex++
-		} else if node.Role == "slave" {
-			port, err := ParsePort(node.Port)
-			if err != nil {
-				// Use default port based on protocol
-				switch protocol {
-				case "modbus":
-					port = 502
-				case "dnp3":
-					port = 20000
-				case "iec104":
-					port = 2404
-				default:
-					port = 502
-				}
-			}
-
-			var deps []string
-			if slaveIndex > 0 {
-				deps = []string{slaveServices[slaveIndex-1]}
-			}
-
-			err = generator.AddSlaveService(slaveIndex, node.IP, networkName, port, deps)
-			if err != nil {
-				return fmt.Errorf("failed to add slave service: %w", err)
-			}
-
-			slaveServices = append(slaveServices, fmt.Sprintf("slave_%d", slaveIndex))
-			slaveIndex++
+		if node.Role != "slave" {
+			continue
 		}
+		port, err := ParsePort(node.Port)
+		if err != nil {
+			// Use default port based on protocol
+			switch protocol {
+			case "modbus":
+				port = 502
+			case "dnp3":
+				port = 20000
+			case "iec104":
+				port = 2404
+			default:
+				port = 502
+			}
+		}
+
+		var deps []string
+		if slaveIndex > 0 {
+			deps = []string{slaveServices[slaveIndex-1]}
+		}
+
+		if err := generator.AddSlaveService(slaveIndex, node.IP, networkName, port, deps); err != nil {
+			return fmt.Errorf("failed to add slave service: %w", err)
+		}
+
+		slaveServices = append(slaveServices, fmt.Sprintf("slave_%d", slaveIndex))
+		slaveIndex++
+	}
+
+	// Add masters with dependencies on all slaves
+	masterIndex := 0
+	for _, node := range scenario.Nodes {
+		if node.Role != "master" {
+			continue
+		}
+		if err := generator.AddMasterService(masterIndex, node.IP, networkName, slaveServices); err != nil {
+			return fmt.Errorf("failed to add master service: %w", err)
+		}
+		masterIndex++
 	}
 
 	// Generate the compose file
 	return generator.Generate(outputPath)
+}
+
+func buildNetworkName(ipNetwork string) string {
+	if ipNetwork == "" {
+		return "ics_network"
+	}
+	normalized := strings.NewReplacer(".", "_", "/", "_").Replace(ipNetwork)
+	return "ics_network_" + normalized
+}
+
+func findExistingNetworkBySubnet(subnet string) (string, error) {
+	if subnet == "" {
+		return "", nil
+	}
+	listCmd := exec.Command("docker", "network", "ls", "--format", "{{.Name}}")
+	output, err := listCmd.Output()
+	if err != nil {
+		return "", err
+	}
+	names := strings.Fields(string(output))
+	for _, name := range names {
+		inspectCmd := exec.Command("docker", "network", "inspect", "-f", "{{range .IPAM.Config}}{{.Subnet}}{{end}}", name)
+		inspectOut, err := inspectCmd.Output()
+		if err != nil {
+			continue
+		}
+		if strings.TrimSpace(string(inspectOut)) == subnet {
+			return name, nil
+		}
+	}
+	return "", nil
 }
 
 // UpCompose starts the Docker Compose services

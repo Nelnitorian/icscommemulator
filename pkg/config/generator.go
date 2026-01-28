@@ -1,30 +1,29 @@
 package config
 
 import (
-	"encoding/csv"
 	"fmt"
 	"icscommemulator/pkg/logger"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
-	"strings"
 
 	"gopkg.in/yaml.v3"
 )
 
-// Message represents a message configuration for master nodes
+// Message represents a message configuration for master nodes (generic)
 type Message struct {
-	Timestamp    string        `json:"timestamp" yaml:"timestamp"`
-	Recurrent    bool          `json:"recurrent" yaml:"recurrent"`
-	Interval     int           `json:"interval,omitempty" yaml:"interval,omitempty"`
-	IP           string        `json:"ip" yaml:"ip"`
-	Port         int           `json:"port" yaml:"port"`
-	
+	Timestamp int    `json:"timestamp" yaml:"timestamp"`
+	Recurrent bool   `json:"recurrent" yaml:"recurrent"`
+	Interval  int    `json:"interval,omitempty" yaml:"interval,omitempty"`
+	IP        string `json:"ip" yaml:"ip"`
+	Port      int    `json:"port" yaml:"port"`
+
 	// MODBUS specific
 	SlaveID      int           `json:"slave_id,omitempty" yaml:"slave_id,omitempty"`
-	FunctionCode string        `json:"function_code,omitempty" yaml:"function_code,omitempty"`
+	FunctionCode int           `json:"function_code,omitempty" yaml:"function_code,omitempty"`
 	StartAddress int           `json:"start_address,omitempty" yaml:"start_address,omitempty"`
-	Count        interface{}   `json:"count,omitempty" yaml:"count,omitempty"`
+	Count        int           `json:"count,omitempty" yaml:"count,omitempty"`
 	Values       []interface{} `json:"values,omitempty" yaml:"values,omitempty"`
 
 	// DNP3 specific
@@ -84,6 +83,21 @@ type Node struct {
 	MeasuredScaled     map[string]interface{} `json:"measured_scaled,omitempty" yaml:"measured_scaled,omitempty"`
 	MeasuredNormalized map[string]interface{} `json:"measured_normalized,omitempty" yaml:"measured_normalized,omitempty"`
 
+	// IEC104 New Fields for hierarchical YAML
+	TickRateMS        int   `json:"tick_rate_ms,omitempty" yaml:"tick_rate_ms,omitempty"`
+	SelectTimeoutMS   int   `json:"select_timeout_ms,omitempty" yaml:"select_timeout_ms,omitempty"`
+	MaxConnections    int   `json:"max_connections,omitempty" yaml:"max_connections,omitempty"`
+	AuthorizedMasters []int `json:"authorized_masters,omitempty" yaml:"authorized_masters,omitempty"`
+
+	// Comandos y Setpoints para IEC104 (mapeados genéricamente)
+	SingleCommands     map[string]interface{} `json:"single_commands,omitempty" yaml:"single_commands,omitempty"`
+	SetpointShort      map[string]interface{} `json:"setpoint_short,omitempty" yaml:"setpoint_short,omitempty"`
+	MeasuredShort      map[string]interface{} `json:"measured_short,omitempty" yaml:"measured_short,omitempty"`
+	MeasuredShortTime  map[string]interface{} `json:"measured_short_time,omitempty" yaml:"measured_short_time,omitempty"`
+	SinglePointsTime   map[string]interface{} `json:"single_points_time,omitempty" yaml:"single_points_time,omitempty"`
+	SingleCommandsTime map[string]interface{} `json:"single_commands_time,omitempty" yaml:"single_commands_time,omitempty"`
+	SetpointShortTime  map[string]interface{} `json:"setpoint_short_time,omitempty" yaml:"setpoint_short_time,omitempty"`
+
 	// Common
 	Identity map[string]interface{} `json:"identity,omitempty" yaml:"identity,omitempty"`
 }
@@ -92,6 +106,18 @@ type Node struct {
 type Scenario struct {
 	Protocol string `json:"protocol" yaml:"protocol"`
 	Nodes    []Node `json:"nodes" yaml:"nodes"`
+}
+
+// MasterConfig is a unified master schedule config (YAML)
+type MasterConfig struct {
+	Protocol string    `yaml:"protocol"`
+	Messages []Message `yaml:"messages,omitempty"`
+}
+
+// SlaveConfig is a unified slave config wrapper (YAML)
+type SlaveConfig struct {
+	Protocol string      `yaml:"protocol"`
+	Node     interface{} `yaml:"node"`
 }
 
 // Generator manages scenario configuration file generation
@@ -127,6 +153,48 @@ func ConvertToInt(value interface{}) interface{} {
 	}
 }
 
+func normalizeRegisterConfig(raw map[string]interface{}) ModbusRegisterConfig {
+	if raw == nil {
+		return ModbusRegisterConfig{Type: "sparse", Values: map[string]interface{}{}}
+	}
+
+	if typ, ok := raw["type"].(string); ok {
+		values := raw["values"]
+		if values == nil {
+			values = map[string]interface{}{}
+		}
+		return ModbusRegisterConfig{Type: typ, Values: values}
+	}
+
+	// Default: sparse map from address -> value
+	return ModbusRegisterConfig{
+		Type:   "sparse",
+		Values: raw,
+	}
+}
+
+func buildModbusSlaveConfig(slave Node) (ModbusSlaveConfig, error) {
+	config := ModbusSlaveConfig{
+		IP:               slave.IP,
+		Port:             502,
+		SlaveID:          1,
+		DiscreteInputs:   normalizeRegisterConfig(slave.DiscreteInputs),
+		Coils:            normalizeRegisterConfig(slave.Coils),
+		InputRegisters:   normalizeRegisterConfig(slave.InputRegisters),
+		HoldingRegisters: normalizeRegisterConfig(slave.HoldingRegisters),
+		Identity:         slave.Identity,
+	}
+
+	if p, ok := ConvertToInt(slave.Port).(int); ok {
+		config.Port = p
+	}
+	if sid, ok := ConvertToInt(slave.SlaveID).(int); ok {
+		config.SlaveID = sid
+	}
+
+	return config, nil
+}
+
 // CraftMaster creates configuration files for master nodes
 func (g *Generator) CraftMaster(messages []Message, index int) error {
 	masterDir := filepath.Join(g.configPath, "masters", strconv.Itoa(index))
@@ -135,221 +203,238 @@ func (g *Generator) CraftMaster(messages []Message, index int) error {
 		return fmt.Errorf("failed to create master directory: %w", err)
 	}
 
-	csvFile := filepath.Join(masterDir, "master.csv")
-	if len(messages) == 0 {
-		file, err := os.Create(csvFile)
-		if err != nil {
-			return fmt.Errorf("failed to create empty CSV file: %w", err)
-		}
-		file.Close()
-		return nil
-	}
-
-	file, err := os.Create(csvFile)
+	yamlFile := filepath.Join(masterDir, "master.yaml")
+	file, err := os.Create(yamlFile)
 	if err != nil {
-		return fmt.Errorf("failed to create CSV file: %w", err)
+		return fmt.Errorf("failed to create master YAML file: %w", err)
 	}
 	defer file.Close()
 
-	writer := csv.NewWriter(file)
-	defer writer.Flush()
+	encoder := yaml.NewEncoder(file)
+	encoder.SetIndent(2)
+	defer encoder.Close()
 
-	// Write CSV header based on protocol
-	var header []string
-	switch g.protocol {
-	case "modbus":
-		header = []string{
-			"timestamp", "recurrent", "interval", "ip", "port", "slave_id",
-			"function_code", "start_address", "count", "values",
-		}
-	case "dnp3":
-		header = []string{
-			"timestamp", "ip", "port", "operation_type", "group", "variation",
-			"index", "master_id", "outstation_id", "recurrent", "interval", "value",
-		}
-	case "iec104":
-		header = []string{
-			"timestamp", "ip", "port", "type_id", "common_address",
-			"recurrent", "interval", "ioa", "cot", "value",
-		}
-	default:
-		return fmt.Errorf("unsupported protocol: %s", g.protocol)
+	config := MasterConfig{
+		Protocol: g.protocol,
+		Messages: messages,
 	}
 
-	if err := writer.Write(header); err != nil {
-		return fmt.Errorf("failed to write CSV header: %w", err)
-	}
-
-	// Write data rows
-	for _, message := range messages {
-		var row []string
-		switch g.protocol {
-		case "modbus":
-			count := ConvertToInt(message.Count)
-			countStr := ""
-			if count != nil {
-				switch c := count.(type) {
-				case int:
-					countStr = strconv.Itoa(c)
-				case string:
-					countStr = c
-				}
-			}
-			
-			// CORRECCIÓN: Convertir slice a string separada por comas
-			valuesStr := formatSliceToCSV(message.Values)
-
-			row = []string{
-				message.Timestamp,
-				strconv.FormatBool(message.Recurrent),
-				strconv.Itoa(message.Interval),
-				message.IP,
-				strconv.Itoa(message.Port),
-				strconv.Itoa(message.SlaveID),
-				message.FunctionCode,
-				strconv.Itoa(message.StartAddress),
-				countStr,
-				valuesStr,
-			}
-
-		case "dnp3":
-			row = []string{
-				message.Timestamp,
-				message.IP,
-				strconv.Itoa(message.Port),
-				message.OperationType,
-				strconv.Itoa(message.Group),
-				strconv.Itoa(message.Variation),
-				strconv.Itoa(message.Index),
-				strconv.Itoa(message.MasterID),
-				strconv.Itoa(message.OutstationID),
-				strconv.FormatBool(message.Recurrent),
-				strconv.Itoa(message.Interval),
-				message.Value,
-			}
-
-		case "iec104":
-			row = []string{
-				message.Timestamp,
-				message.IP,
-				strconv.Itoa(message.Port),
-				strconv.Itoa(message.TypeID),
-				strconv.Itoa(message.CommonAddress),
-				strconv.FormatBool(message.Recurrent),
-				strconv.Itoa(message.Interval),
-				strconv.Itoa(message.IOA),
-				strconv.Itoa(message.COT),
-				message.Value,
-			}
-		}
-
-		if err := writer.Write(row); err != nil {
-			return fmt.Errorf("failed to write CSV row: %w", err)
-		}
-	}
-
-	return nil
+	return encoder.Encode(config)
 }
 
-// formatSliceToCSV convierte un slice de interfaces a string CSV
-// [] -> ""
-// [1, 2, 3] -> "1,2,3"
-func formatSliceToCSV(values []interface{}) string {
-	if len(values) == 0 {
-		return ""
-	}
-
-	strValues := make([]string, len(values))
-	for i, v := range values {
-		switch val := v.(type) {
-		case int:
-			strValues[i] = strconv.Itoa(val)
-		case float64:
-			strValues[i] = strconv.FormatFloat(val, 'f', -1, 64)
-		case string:
-			strValues[i] = val
-		default:
-			strValues[i] = fmt.Sprintf("%v", val)
-		}
-	}
-
-	return strings.Join(strValues, ",")
+// Estructuras auxiliares para el formato YAML específico de IEC104
+type IEC104ProtocolParams struct {
+	T1 int `yaml:"t1"`
+	T2 int `yaml:"t2"`
+	T3 int `yaml:"t3"`
+	K  int `yaml:"k"`
+	W  int `yaml:"w"`
 }
 
+type IEC104Station struct {
+	CommonAddress int                      `yaml:"common_address"`
+	Points        map[string][]interface{} `yaml:"points"`
+}
+
+type IEC104SlaveConfig struct {
+	IP                 string               `yaml:"ip"`
+	Port               int                  `yaml:"port"`
+	TickRateMS         int                  `yaml:"tick_rate_ms"`
+	SelectTimeoutMS    int                  `yaml:"select_timeout_ms"`
+	MaxConnections     int                  `yaml:"max_connections"`
+	ProtocolParameters IEC104ProtocolParams `yaml:"protocol_parameters"`
+	Stations           []IEC104Station      `yaml:"stations"`
+	AuthorizedMasters  []int                `yaml:"authorized_masters"`
+}
+
+type ModbusRegisterConfig struct {
+	Type   string      `yaml:"type"`
+	Values interface{} `yaml:"values"`
+}
+
+type ModbusSlaveConfig struct {
+	IP               string                 `yaml:"ip"`
+	Port             int                    `yaml:"port"`
+	SlaveID          int                    `yaml:"slave_id"`
+	DiscreteInputs   ModbusRegisterConfig   `yaml:"discrete_inputs"`
+	Coils            ModbusRegisterConfig   `yaml:"coils"`
+	InputRegisters   ModbusRegisterConfig   `yaml:"input_registers"`
+	HoldingRegisters ModbusRegisterConfig   `yaml:"holding_registers"`
+	Identity         map[string]interface{} `yaml:"identity,omitempty"`
+}
 
 // CraftSlave creates configuration files for slave nodes
 func (g *Generator) CraftSlave(slave Node, index int) error {
 	slaveDir := filepath.Join(g.configPath, "slaves", strconv.Itoa(index))
 	logger.Debug("Creating slave directory: %s", slaveDir)
-	
+
 	err := os.MkdirAll(slaveDir, 0755)
 	if err != nil {
 		logger.Error("Failed to create slave directory %s: %v", slaveDir, err)
 		return fmt.Errorf("failed to create slave directory: %w", err)
 	}
 
-	logger.Debug("Slave directory created successfully: %s", slaveDir)
-
-	// Create a copy of the slave node and remove unwanted fields
-	slaveCopy := make(map[string]interface{})
-	
-	// Convert struct to map for easier manipulation
-	slaveData, err := yaml.Marshal(slave)
-	if err != nil {
-		logger.Error("Failed to marshal slave data: %v", err)
-		return fmt.Errorf("failed to marshal slave data: %w", err)
-	}
-
-	logger.Debug("Slave data marshaled: %s", string(slaveData))
-	
-	err = yaml.Unmarshal(slaveData, &slaveCopy)
-	if err != nil {
-		logger.Error("Failed to unmarshal slave data: %v", err)
-		return fmt.Errorf("failed to unmarshal slave data: %w", err)
-	}
-
-	// Remove unwanted keys
-	fieldsToRemove := []string{"comment", "label", "role", "name", "id"}
-	for _, key := range fieldsToRemove {
-		delete(slaveCopy, key)
-	}
-
-	logger.DebugStruct("Cleaned slave data", slaveCopy)
-
-	// Write YAML file
 	yamlFile := filepath.Join(slaveDir, "slave.yaml")
-	logger.Debug("Creating slave YAML file: %s", yamlFile)
-	
 	file, err := os.Create(yamlFile)
 	if err != nil {
-		logger.Error("Failed to create YAML file %s: %v", yamlFile, err)
 		return fmt.Errorf("failed to create YAML file: %w", err)
 	}
 	defer file.Close()
 
 	encoder := yaml.NewEncoder(file)
+	encoder.SetIndent(2) // Indentación bonita
 	defer encoder.Close()
 
-	err = encoder.Encode(slaveCopy)
+	// LOGICA ESPECIFICA PARA IEC104 (Formato Jerárquico)
+	if g.protocol == "iec104" {
+		config := IEC104SlaveConfig{
+			IP:                slave.IP,
+			TickRateMS:        slave.TickRateMS,
+			SelectTimeoutMS:   slave.SelectTimeoutMS,
+			MaxConnections:    slave.MaxConnections,
+			AuthorizedMasters: slave.AuthorizedMasters,
+		}
+
+		// Convertir Puerto
+		if p, ok := ConvertToInt(slave.Port).(int); ok {
+			config.Port = p
+		}
+
+		// Protocol Parameters
+		if t1, ok := ConvertToInt(slave.T1).(int); ok {
+			config.ProtocolParameters.T1 = t1
+		}
+		if t2, ok := ConvertToInt(slave.T2).(int); ok {
+			config.ProtocolParameters.T2 = t2
+		}
+		if t3, ok := ConvertToInt(slave.T3).(int); ok {
+			config.ProtocolParameters.T3 = t3
+		}
+		if k, ok := ConvertToInt(slave.K).(int); ok {
+			config.ProtocolParameters.K = k
+		}
+		if w, ok := ConvertToInt(slave.W).(int); ok {
+			config.ProtocolParameters.W = w
+		}
+
+		// Stations & Points
+		// Creamos una única estación usando el CommonAddress del nodo
+		commonAddr := 1 // Default
+		if ca, ok := ConvertToInt(slave.CommonAddress).(int); ok {
+			commonAddr = ca
+		}
+
+		points := make(map[string][]interface{})
+
+		// Helpers para convertir mapas planos a listas de objetos
+		addPoints := func(key string, source map[string]interface{}) {
+			if len(source) > 0 {
+				list := convertMapToList(source)
+				if len(list) > 0 {
+					points[key] = list
+				}
+			}
+		}
+
+		addPoints("single_points", slave.SinglePoints)
+		addPoints("measured_scaled", slave.MeasuredScaled)
+		addPoints("measured_short", slave.MeasuredShort)
+		addPoints("measured_normalized", slave.MeasuredNormalized)
+		addPoints("single_commands", slave.SingleCommands)
+		addPoints("setpoint_short", slave.SetpointShort)
+		addPoints("measured_short_time", slave.MeasuredShortTime)
+		addPoints("single_points_time", slave.SinglePointsTime)
+		addPoints("single_commands_time", slave.SingleCommandsTime)
+		addPoints("setpoint_short_time", slave.SetpointShortTime)
+
+		config.Stations = []IEC104Station{
+			{
+				CommonAddress: commonAddr,
+				Points:        points,
+			},
+		}
+
+		return encoder.Encode(SlaveConfig{
+			Protocol: g.protocol,
+			Node:     config,
+		})
+	}
+
+	// MODBUS / DNP3: Wrap node config to keep a consistent YAML format
+	if g.protocol == "modbus" {
+		modbusNode, err := buildModbusSlaveConfig(slave)
+		if err != nil {
+			return err
+		}
+		return encoder.Encode(SlaveConfig{
+			Protocol: g.protocol,
+			Node:     modbusNode,
+		})
+	}
+
+	// DNP3 (left as flat node until protocol migration)
+	slaveCopy := make(map[string]interface{})
+	slaveData, err := yaml.Marshal(slave)
 	if err != nil {
-		logger.Error("Failed to encode YAML to file %s: %v", yamlFile, err)
-		return fmt.Errorf("failed to encode YAML: %v", err)
+		return fmt.Errorf("failed to marshal slave data: %w", err)
 	}
 
-	// Verify file was created
-	fileInfo, err := os.Stat(yamlFile)
-	if err != nil {
-		logger.Error("Failed to stat created file %s: %v", yamlFile, err)
-		return fmt.Errorf("failed to verify created file: %w", err)
+	if err := yaml.Unmarshal(slaveData, &slaveCopy); err != nil {
+		return fmt.Errorf("failed to unmarshal slave data: %w", err)
 	}
 
-	if fileInfo.IsDir() {
-		logger.Error("Created path is a directory instead of file: %s", yamlFile)
-		return fmt.Errorf("created path is a directory instead of file: %s", yamlFile)
+	fieldsToRemove := []string{"comment", "label", "role", "name", "id"}
+	for _, key := range fieldsToRemove {
+		delete(slaveCopy, key)
 	}
 
-	logger.Info("Successfully created slave config file: %s (size: %d bytes)", yamlFile, fileInfo.Size())
-	return nil
+	return encoder.Encode(SlaveConfig{
+		Protocol: g.protocol,
+		Node:     slaveCopy,
+	})
+}
+
+// convertMapToList convierte un map[string]interface{} (donde interface es un map de propiedades)
+// a una lista ordenada por IOA para que el YAML quede limpio.
+func convertMapToList(source map[string]interface{}) []interface{} {
+	var list []interface{}
+
+	// Para ordenar la salida, necesitamos extraer las claves o IOAs
+	type item struct {
+		ioa int
+		val map[string]interface{}
+	}
+	var items []item
+
+	for k, v := range source {
+		props, ok := v.(map[string]interface{})
+		if !ok {
+			// Si el valor no es un mapa, quizás es un simple value, intentar reconstruir objeto
+			continue
+		}
+
+		// Intentar obtener IOA del mapa de propiedades, o de la clave del mapa superior
+		var ioa int
+		if valIOA, exists := props["ioa"]; exists {
+			ioa = ConvertToInt(valIOA).(int)
+		} else {
+			ioa = ConvertToInt(k).(int)
+			props["ioa"] = ioa // Asegurarse de que el IOA esté dentro del objeto para el YAML
+		}
+
+		items = append(items, item{ioa: ioa, val: props})
+	}
+
+	// Ordenar por IOA
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].ioa < items[j].ioa
+	})
+
+	for _, it := range items {
+		list = append(list, it.val)
+	}
+
+	return list
 }
 
 // Clean removes the configuration directory and all its contents
@@ -363,27 +448,20 @@ func (g *Generator) Clean() error {
 // Generate creates the configuration files for the scenario
 func (g *Generator) Generate() error {
 	logger.Info("Starting configuration generation in: %s", g.configPath)
-	
-	// Clean existing configuration
+
 	err := g.Clean()
 	if err != nil {
-		logger.Error("Failed to clean configuration path %s: %v", g.configPath, err)
 		return fmt.Errorf("failed to clean configuration path: %w", err)
 	}
-
-	logger.Debug("Configuration path cleaned successfully")
 
 	// Generate master configurations
 	masterIndex := 0
 	for _, node := range g.scenario.Nodes {
 		if IsMaster(node) {
-			logger.Debug("Generating master config %d", masterIndex)
 			err := g.CraftMaster(node.Messages, masterIndex)
 			if err != nil {
-				logger.Error("Failed to craft master %d: %v", masterIndex, err)
 				return fmt.Errorf("failed to craft master %d: %w", masterIndex, err)
 			}
-			logger.Info("Successfully generated master config %d", masterIndex)
 			masterIndex++
 		}
 	}
@@ -392,34 +470,27 @@ func (g *Generator) Generate() error {
 	slaveIndex := 0
 	for _, node := range g.scenario.Nodes {
 		if IsSlave(node) {
-			logger.Debug("Generating slave config %d", slaveIndex)
 			err := g.CraftSlave(node, slaveIndex)
 			if err != nil {
-				logger.Error("Failed to craft slave %d: %v", slaveIndex, err)
 				return fmt.Errorf("failed to craft slave %d: %w", slaveIndex, err)
 			}
-			logger.Info("Successfully generated slave config %d", slaveIndex)
 			slaveIndex++
 		}
 	}
 
-	logger.Info("Configuration generation completed successfully")
 	return nil
 }
 
 // Helper functions
 
-// IsMaster checks if a node is a master node
 func IsMaster(node Node) bool {
 	return node.Role == "master"
 }
 
-// IsSlave checks if a node is a slave node
 func IsSlave(node Node) bool {
 	return node.Role == "slave"
 }
 
-// FilterMasters returns only the master nodes from a slice of nodes
 func FilterMasters(nodes []Node) []Node {
 	var masters []Node
 	for _, node := range nodes {
@@ -430,7 +501,6 @@ func FilterMasters(nodes []Node) []Node {
 	return masters
 }
 
-// FilterSlaves returns only the slave nodes from a slice of nodes
 func FilterSlaves(nodes []Node) []Node {
 	var slaves []Node
 	for _, node := range nodes {
@@ -441,7 +511,6 @@ func FilterSlaves(nodes []Node) []Node {
 	return slaves
 }
 
-// GetMasterCount returns the number of master nodes
 func (g *Generator) GetMasterCount() int {
 	count := 0
 	for _, node := range g.scenario.Nodes {
@@ -452,7 +521,6 @@ func (g *Generator) GetMasterCount() int {
 	return count
 }
 
-// GetSlaveCount returns the number of slave nodes
 func (g *Generator) GetSlaveCount() int {
 	count := 0
 	for _, node := range g.scenario.Nodes {
@@ -463,9 +531,7 @@ func (g *Generator) GetSlaveCount() int {
 	return count
 }
 
-// GenerateFromMap creates a generator from a map[string]interface{} (for JSON compatibility)
 func GenerateFromMap(scenarioMap map[string]interface{}, configPath string) error {
-	// Convert map to Scenario struct
 	scenarioData, err := yaml.Marshal(scenarioMap)
 	if err != nil {
 		return fmt.Errorf("failed to marshal scenario map: %w", err)
