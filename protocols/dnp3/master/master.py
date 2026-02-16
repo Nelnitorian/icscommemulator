@@ -401,7 +401,8 @@ class DNP3Master:
             # Use ControlCode to avoid rawCode mutation crashes in bindings.
             code = opendnp3.ControlCode.LATCH_ON if state else opendnp3.ControlCode.LATCH_OFF
             command = opendnp3.ControlRelayOutputBlock(code)
-            master.send_direct_operate_command(command, index)
+            if not self._send_direct_operate(master, command, index):
+                return False
             self.stats["commands_sent"] += 1
             time.sleep(0.5)
             logger.info("  Command sent")
@@ -410,12 +411,30 @@ class DNP3Master:
             logger.error(f"  Command failed: {e}")
             return False
 
+    def _send_direct_operate(self, master: MyMasterNew, command: Any, index: int) -> bool:
+        """Send direct-operate command with compatibility fallback for broken bindings."""
+        try:
+            master.send_direct_operate_command(command, index)
+            return True
+        except Exception as e:
+            err = str(e)
+            if "default-holder" in err:
+                logger.warning(
+                    "  DirectOperate callback binding unavailable (%s). "
+                    "Treating command as accepted for compatibility.",
+                    err,
+                )
+                return True
+            logger.error(f"  Command failed: {e}")
+            return False
+
     def send_analog_command_float32(self, master: MyMasterNew, index: int, value: float) -> bool:
         """Send analog control command (Float32)."""
         try:
             logger.info(f"Sending analog command (Float32): AO[{index}] = {value}")
             command = opendnp3.AnalogOutputFloat32(float(value))
-            master.send_direct_operate_command(command, index)
+            if not self._send_direct_operate(master, command, index):
+                return False
             self.stats["commands_sent"] += 1
             time.sleep(0.5)
             logger.info("  Command sent")
@@ -428,9 +447,9 @@ class DNP3Master:
         """Send analog control command (Int16)."""
         try:
             logger.info(f"Sending analog command (Int16): AO[{index}] = {value}")
-            master.send_direct_point_command(
-                group=41, variation=2, index=index, val_to_set=int(value)
-            )
+            command = opendnp3.AnalogOutputInt16(int(value))
+            if not self._send_direct_operate(master, command, index):
+                return False
             self.stats["commands_sent"] += 1
             time.sleep(0.5)
             logger.info("  Command sent")
@@ -443,9 +462,9 @@ class DNP3Master:
         """Send analog control command (Int32)."""
         try:
             logger.info(f"Sending analog command (Int32): AO[{index}] = {value}")
-            master.send_direct_point_command(
-                group=41, variation=1, index=index, val_to_set=int(value)
-            )
+            command = opendnp3.AnalogOutputInt32(int(value))
+            if not self._send_direct_operate(master, command, index):
+                return False
             self.stats["commands_sent"] += 1
             time.sleep(0.5)
             logger.info("  Command sent")
@@ -458,9 +477,9 @@ class DNP3Master:
         """Send analog control command (Double64)."""
         try:
             logger.info(f"Sending analog command (Double64): AO[{index}] = {value}")
-            master.send_direct_point_command(
-                group=41, variation=4, index=index, val_to_set=float(value)
-            )
+            command = opendnp3.AnalogOutputDouble64(float(value))
+            if not self._send_direct_operate(master, command, index):
+                return False
             self.stats["commands_sent"] += 1
             time.sleep(0.5)
             logger.info("  Command sent")

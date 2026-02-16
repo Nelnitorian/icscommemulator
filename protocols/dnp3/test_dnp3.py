@@ -184,7 +184,6 @@ def stop_recurrent(master):
 
 
 # Connection Tests
-@pytest.mark.integration
 class TestConnection:
     """Test DNP3 connection establishment."""
 
@@ -209,7 +208,6 @@ class TestConnection:
 
 
 # Analog Input Tests
-@pytest.mark.integration
 class TestAnalogInputs:
     """Test analog input polling."""
 
@@ -249,7 +247,6 @@ class TestAnalogInputs:
 
 
 # Binary Input Tests
-@pytest.mark.integration
 class TestBinaryInputs:
     """Test binary input polling."""
 
@@ -277,7 +274,6 @@ class TestBinaryInputs:
 
 
 # Output Status Tests
-@pytest.mark.integration
 class TestOutputStatus:
     """Test analog and binary output status polling."""
 
@@ -307,7 +303,6 @@ class TestOutputStatus:
 
 
 # CSV Operations Tests
-@pytest.mark.integration
 class TestCSVOperations:
     """Test execution of operations from CSV file."""
 
@@ -344,7 +339,6 @@ class TestCSVOperations:
 
 
 # Bidirectional Communication Tests
-@pytest.mark.integration
 class TestBidirectionalCommunication:
     """Test bidirectional data flow."""
 
@@ -375,7 +369,6 @@ class TestBidirectionalCommunication:
 
 
 # Command Tests
-@pytest.mark.integration
 @pytest.mark.skipif(
     SKIP_COMMAND_TESTS,
     reason="DirectOperate crashes under Python 3.12 for current pydnp3 build",
@@ -425,7 +418,6 @@ class TestCommands:
 
 
 # Poll variants not covered by YAML
-@pytest.mark.integration
 class TestPollVariants:
     """Test poll variants not covered by base YAML."""
 
