@@ -23,9 +23,9 @@ type MasterConfig struct {
 }
 
 type ScheduleEntry struct {
-	Timestamp     int    `yaml:"timestamp"`
+	Timestamp     float64 `yaml:"timestamp"`
 	Recurrent     bool   `yaml:"recurrent"`
-	Interval      int    `yaml:"interval"`
+	Interval      float64 `yaml:"interval"`
 	IP            string `yaml:"ip"`
 	Port          int    `yaml:"port"`
 	TypeID        int    `yaml:"type_id"`
@@ -151,7 +151,7 @@ func (m *IEC104Master) processQueue(addr string, client *cs104.Client, queue []S
 			m.logger.Warnf("IEC104 client activation timeout to %s", addr)
 		}
 	}
-	currentTime := 0
+	currentTime := 0.0
 	for {
 		select {
 		case <-sigChan:
@@ -173,7 +173,7 @@ func (m *IEC104Master) processQueue(addr string, client *cs104.Client, queue []S
 
 		delay := msg.Timestamp - currentTime
 		if delay > 0 {
-			time.Sleep(time.Duration(delay) * time.Second)
+			time.Sleep(time.Duration(delay * float64(time.Second)))
 		}
 		currentTime = msg.Timestamp
 

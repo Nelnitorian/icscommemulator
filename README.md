@@ -10,7 +10,6 @@ capturando trafico en PCAP con `tcpdump`. Tambien soporta ataques definidos en
 - Go 1.24.x (ver `go.mod`).
 - Docker Engine y Docker Compose v2 (plugin).
 - `tcpdump` (para capturar trafico).
-- `tc` (paquete `iproute2`, para emulacion de red).
 
 Opcional (solo si necesitas ejecutar utilidades Python o el stack DNP3 fuera
 de Docker):
@@ -24,7 +23,7 @@ instalacion manual basica:
 ```
 sudo apt-get update
 sudo apt-get install -y docker-ce docker-ce-cli containerd.io \
-  docker-buildx-plugin docker-compose-plugin tcpdump iproute2
+  docker-buildx-plugin docker-compose-plugin tcpdump
 ```
 
 Si planeas usar los componentes Python:

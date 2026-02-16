@@ -101,6 +101,7 @@ func (s *Server) setupRoutes(mux *http.ServeMux) {
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(s.staticPath))))
 
 	mux.HandleFunc("/api/networks/", s.handlers.HandleNetworks)
+	mux.HandleFunc("/api/networks/import", s.handlers.HandleImportNetwork)
 	mux.HandleFunc("/api/run", s.handlers.HandleRun)
 
 	mux.HandleFunc("/", s.handleHome)

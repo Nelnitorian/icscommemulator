@@ -3,6 +3,7 @@ window.App = window.App || {};
 (function () {
     'use strict';
     const CONSTANTS = App.CONSTANTS;
+    const t = (key, vars) => (window.I18N ? window.I18N.t(key, vars) : key);
 
     const ProtocolConfig = {
         MODBUS: {
@@ -76,7 +77,7 @@ window.App = window.App || {};
             if (!values) return -1;
             const isSparse = type === CONSTANTS.REGISTER_TYPES.SPARSE;
             if (!this.checkCharacters(values, isSparse)) {
-                if (App.UIUtils) App.UIUtils.showError('Error: Incorrect register value format');
+                if (App.UIUtils) App.UIUtils.showError(t('protocols.registerFormatError'));
                 return null;
             }
             if (!isSparse) return values.split(',').map(Number);

@@ -102,6 +102,91 @@ func TestApplyAttacksValuesCount(t *testing.T) {
 	}
 }
 
+func TestApplyAttacksAddsPacketReferences(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	attackPath := filepath.Join(wd, "..", "..", "web", "static", "attacks", "attacks.json")
+	t.Setenv("ICS_ATTACKS_CATALOG_PATH", attackPath)
+
+	simplified := map[string]interface{}{
+		"nodes": []map[string]interface{}{
+			{
+				"id":        "master_0",
+				"role":      "master",
+				"ip":        "192.168.1.10",
+				"port":      502,
+				"master_id": 1,
+				"messages": []map[string]interface{}{
+					{
+						"timestamp":     0.5,
+						"recurrent":     false,
+						"interval":      0.0,
+						"ip":            "192.168.1.11",
+						"port":          502,
+						"slave_id":      1,
+						"function_code": 3,
+						"start_address": 0,
+						"count":         1,
+					},
+				},
+				"attacks": []adapter.AttackConfig{
+					{
+						ID:        "modbus_write_single_register",
+						Enabled:   true,
+						TargetID:  "slave_0",
+						StartTime: 8,
+						Interval:  1,
+						Count:     2,
+						Parameters: map[string]interface{}{
+							"address": 1,
+							"value":   1337,
+						},
+					},
+				},
+			},
+			{
+				"id":       "slave_0",
+				"role":     "slave",
+				"ip":       "192.168.1.11",
+				"port":     502,
+				"slave_id": 1,
+			},
+		},
+	}
+
+	svc := &ScenarioService{}
+	labels, err := svc.applyAttacks(simplified, "modbus")
+	if err != nil {
+		t.Fatalf("applyAttacks failed: %v", err)
+	}
+	if len(labels) != 1 {
+		t.Fatalf("expected 1 label, got %d", len(labels))
+	}
+
+	packets := labels[0].Packets
+	if len(packets) != 2 {
+		t.Fatalf("expected 2 packet refs, got %d", len(packets))
+	}
+
+	if packets[0].SendNumber != 1 || packets[1].SendNumber != 2 {
+		t.Fatalf("unexpected send_number values: %+v", packets)
+	}
+	if packets[0].PlannedTimestamp != 8 || packets[1].PlannedTimestamp != 9 {
+		t.Fatalf("unexpected planned_timestamp values: %+v", packets)
+	}
+	if packets[0].ScheduleIndex <= 0 || packets[1].ScheduleIndex <= 0 {
+		t.Fatalf("schedule_index must be positive: %+v", packets)
+	}
+	if packets[0].ScheduleIndex >= packets[1].ScheduleIndex {
+		t.Fatalf("schedule_index should be increasing: %+v", packets)
+	}
+	if packets[0].Match == nil || packets[0].Match["function_code"] == nil {
+		t.Fatalf("expected packet match criteria in label: %+v", packets[0])
+	}
+}
+
 func buildSimplifiedScenarioForAttack(def AttackDefinition) map[string]interface{} {
 	slave := map[string]interface{}{
 		"id":             "slave_0",

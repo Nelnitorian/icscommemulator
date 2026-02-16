@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -36,12 +37,6 @@ func NewScenarioService(workDir string, runnerSvc runner.Service) *ScenarioServi
 type RunScenarioRequest struct {
 	CytoscapeData  adapter.CytoscapeData
 	SimulationTime int
-	Network        *NetworkEmulation
-}
-
-type NetworkEmulation struct {
-	RateLimitMBps     float64
-	PacketLossPercent float64
 }
 
 type RunScenarioResult struct {
@@ -85,16 +80,8 @@ func (s *ScenarioService) RunScenario(req RunScenarioRequest) (*RunScenarioResul
 		return nil, fmt.Errorf("configuration verification failed: %w", err)
 	}
 
-	pcapFilename := fmt.Sprintf("scenario_%d.pcap", time.Now().Unix())
-	var networkEmulation *runner.NetworkEmulation
-	if req.Network != nil {
-		networkEmulation = &runner.NetworkEmulation{
-			RateLimitMBps:     req.Network.RateLimitMBps,
-			PacketLossPercent: req.Network.PacketLossPercent,
-		}
-	}
-
-	filePath, err := s.runnerSvc.Start(dockerComposePath, req.SimulationTime, pcapFilename, configPath, networkEmulation)
+	pcapFilename := fmt.Sprintf("scenario_%d.pcap", time.Now().UnixNano())
+	filePath, err := s.runnerSvc.Start(dockerComposePath, req.SimulationTime, pcapFilename, configPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start scenario: %w", err)
 	}
@@ -223,10 +210,18 @@ type AttackLabel struct {
 	TargetNode  string                 `json:"target_node"`
 	TargetIP    string                 `json:"target_ip,omitempty"`
 	TargetPort  int                    `json:"target_port,omitempty"`
-	StartTime   int                    `json:"start_time"`
-	Interval    int                    `json:"interval,omitempty"`
+	StartTime   float64                `json:"start_time"`
+	Interval    float64                `json:"interval,omitempty"`
 	Count       int                    `json:"count,omitempty"`
 	Message     map[string]interface{} `json:"message"`
+	Packets     []AttackPacketRef      `json:"packets,omitempty"`
+}
+
+type AttackPacketRef struct {
+	SendNumber       int                    `json:"send_number"`
+	PlannedTimestamp float64                `json:"planned_timestamp"`
+	ScheduleIndex    int                    `json:"schedule_index,omitempty"`
+	Match            map[string]interface{} `json:"match,omitempty"`
 }
 
 type attackLabelFile struct {
@@ -254,9 +249,9 @@ type AttackDefinition struct {
 }
 
 type AttackScheduleDefaults struct {
-	StartTime int `json:"start_time,omitempty"`
-	Interval  int `json:"interval,omitempty"`
-	Count     int `json:"count,omitempty"`
+	StartTime float64 `json:"start_time,omitempty"`
+	Interval  float64 `json:"interval,omitempty"`
+	Count     int     `json:"count,omitempty"`
 }
 
 type AttackParameterMetadata struct {
@@ -265,6 +260,12 @@ type AttackParameterMetadata struct {
 	Label       string      `json:"label,omitempty"`
 	Default     interface{} `json:"default,omitempty"`
 	Placeholder string      `json:"placeholder,omitempty"`
+}
+
+type pendingPacketRef struct {
+	refID      int
+	labelIndex int
+	packetIdx  int
 }
 
 func writeAttackLabels(pcapPath, protocol string, labels []AttackLabel) error {
@@ -329,6 +330,7 @@ func (s *ScenarioService) applyAttacks(simplified map[string]interface{}, protoc
 	}
 
 	var labels []AttackLabel
+	nextPacketRefID := 1
 	for _, node := range nodeMaps {
 		if getString(node["role"]) != "master" {
 			continue
@@ -340,6 +342,7 @@ func (s *ScenarioService) applyAttacks(simplified map[string]interface{}, protoc
 		}
 
 		messages := decodeMessages(node["messages"])
+		pendingRefs := make([]pendingPacketRef, 0)
 		for _, attack := range attacks {
 			if !attack.Enabled {
 				continue
@@ -359,17 +362,33 @@ func (s *ScenarioService) applyAttacks(simplified map[string]interface{}, protoc
 				continue
 			}
 
-			newMessages, attackLabel := buildAttackMessages(attack, def, protocol, node, target)
+			newMessages, attackLabel := buildAttackMessages(attack, def, protocol, node, target, &nextPacketRefID)
 			if len(newMessages) == 0 {
 				continue
 			}
 			messages = append(messages, newMessages...)
 			if attackLabel.AttackID != "" {
+				labelIndex := len(labels)
 				labels = append(labels, attackLabel)
+				for packetIdx, message := range newMessages {
+					refID := getInt(message["_attack_packet_ref_id"], 0)
+					if refID <= 0 {
+						continue
+					}
+					pendingRefs = append(pendingRefs, pendingPacketRef{
+						refID:      refID,
+						labelIndex: labelIndex,
+						packetIdx:  packetIdx,
+					})
+				}
 			}
 		}
 
 		if len(messages) > 0 {
+			assignPacketScheduleIndexes(messages, labels, pendingRefs)
+			for _, msg := range messages {
+				delete(msg, "_attack_packet_ref_id")
+			}
 			node["messages"] = messages
 		}
 	}
@@ -430,6 +449,7 @@ func buildAttackMessages(
 	protocol string,
 	source map[string]interface{},
 	target map[string]interface{},
+	nextPacketRefID *int,
 ) ([]map[string]interface{}, AttackLabel) {
 	start, interval, count := resolveAttackSchedule(attack, definition)
 
@@ -444,7 +464,7 @@ func buildAttackMessages(
 
 	baseMessage := map[string]interface{}{
 		"recurrent":      false,
-		"interval":       0,
+		"interval":       0.0,
 		"ip":             targetIP,
 		"port":           targetPort,
 		"master_id":      masterID,
@@ -469,11 +489,25 @@ func buildAttackMessages(
 	templateMessage := renderMessageTemplate(definition.MessageTemplate, resolveAttackParameters(attack, definition))
 	mergedMessage := mergeMessageTemplate(baseMessage, templateMessage)
 
+	step := interval
+	if step <= 0 {
+		step = 1.0
+	}
+
 	var messages []map[string]interface{}
+	var packetRefs []AttackPacketRef
 	for i := 0; i < count; i++ {
 		msg := copyMap(mergedMessage)
-		msg["timestamp"] = start + (i * max(1, interval))
+		plannedTimestamp := start + (float64(i) * step)
+		msg["timestamp"] = plannedTimestamp
+		msg["_attack_packet_ref_id"] = *nextPacketRefID
+		*nextPacketRefID++
 		messages = append(messages, msg)
+		packetRefs = append(packetRefs, AttackPacketRef{
+			SendNumber:       i + 1,
+			PlannedTimestamp: plannedTimestamp,
+			Match:            buildPacketMatch(msg),
+		})
 	}
 
 	label := AttackLabel{
@@ -489,6 +523,7 @@ func buildAttackMessages(
 		Interval:    interval,
 		Count:       count,
 		Message:     mergedMessage,
+		Packets:     packetRefs,
 	}
 
 	return messages, label
@@ -729,14 +764,14 @@ func getParamValues(params map[string]interface{}, key string) []interface{} {
 	return []interface{}{1}
 }
 
-func resolveAttackSchedule(attack adapter.AttackConfig, def AttackDefinition) (int, int, int) {
+func resolveAttackSchedule(attack adapter.AttackConfig, def AttackDefinition) (float64, float64, int) {
 	start := attack.StartTime
 	interval := attack.Interval
 	count := attack.Count
-	if start == 0 && def.ScheduleDefaults.StartTime > 0 {
+	if start <= 0 && def.ScheduleDefaults.StartTime > 0 {
 		start = def.ScheduleDefaults.StartTime
 	}
-	if interval == 0 && def.ScheduleDefaults.Interval > 0 {
+	if interval <= 0 && def.ScheduleDefaults.Interval > 0 {
 		interval = def.ScheduleDefaults.Interval
 	}
 	if count <= 0 {
@@ -973,6 +1008,88 @@ func getBool(value interface{}, fallback bool) bool {
 	}
 }
 
+func assignPacketScheduleIndexes(messages []map[string]interface{}, labels []AttackLabel, refs []pendingPacketRef) {
+	if len(messages) == 0 || len(refs) == 0 {
+		return
+	}
+
+	refByID := make(map[int]pendingPacketRef, len(refs))
+	for _, ref := range refs {
+		refByID[ref.refID] = ref
+	}
+
+	type scheduledMessage struct {
+		msg       map[string]interface{}
+		original  int
+		timestamp float64
+	}
+
+	sorted := make([]scheduledMessage, 0, len(messages))
+	for idx, msg := range messages {
+		sorted = append(sorted, scheduledMessage{
+			msg:       msg,
+			original:  idx,
+			timestamp: getFloat(msg["timestamp"], 0),
+		})
+	}
+
+	sort.Slice(sorted, func(i, j int) bool {
+		if sorted[i].timestamp == sorted[j].timestamp {
+			return sorted[i].original < sorted[j].original
+		}
+		return sorted[i].timestamp < sorted[j].timestamp
+	})
+
+	for scheduleIdx, item := range sorted {
+		refID := getInt(item.msg["_attack_packet_ref_id"], 0)
+		if refID <= 0 {
+			continue
+		}
+		ref, ok := refByID[refID]
+		if !ok {
+			continue
+		}
+		if ref.labelIndex < 0 || ref.labelIndex >= len(labels) {
+			continue
+		}
+		if ref.packetIdx < 0 || ref.packetIdx >= len(labels[ref.labelIndex].Packets) {
+			continue
+		}
+		labels[ref.labelIndex].Packets[ref.packetIdx].ScheduleIndex = scheduleIdx + 1
+	}
+}
+
+func buildPacketMatch(message map[string]interface{}) map[string]interface{} {
+	match := map[string]interface{}{}
+	keys := []string{
+		"timestamp",
+		"ip",
+		"port",
+		"slave_id",
+		"function_code",
+		"start_address",
+		"count",
+		"values",
+		"operation_type",
+		"group",
+		"variation",
+		"index",
+		"master_id",
+		"outstation_id",
+		"value",
+		"type_id",
+		"common_address",
+		"ioa",
+		"cot",
+	}
+	for _, key := range keys {
+		if value, ok := message[key]; ok {
+			match[key] = value
+		}
+	}
+	return match
+}
+
 func pickFirst(values ...string) string {
 	for _, value := range values {
 		if value != "" {
@@ -980,13 +1097,6 @@ func pickFirst(values ...string) string {
 		}
 	}
 	return ""
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }
 
 // cleanDirectory removes the work directory with guardrails.

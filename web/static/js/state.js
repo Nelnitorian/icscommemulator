@@ -2,6 +2,7 @@ window.App = window.App || {};
 
 (function () {
     'use strict';
+    const t = (key, vars) => (window.I18N ? window.I18N.t(key, vars) : key);
 
     const CONSTANTS = {
         KEYS: { DELETE: 'Delete', SUPR: 'Supr', ESCAPE: 'Escape', Z: 'z', Y: 'y' },
@@ -143,9 +144,9 @@ window.App = window.App || {};
             } else {
                 console.error('Invalid IP address');
                 if (App.UIUtils) {
-                    App.UIUtils.showError('Error: Invalid IP address');
+                    App.UIUtils.showError(t('state.invalidIp'));
                 } else {
-                    alert('Error: Invalid IP address');
+                    alert(t('state.invalidIp'));
                 }
                 return fallback;
             }

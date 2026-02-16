@@ -68,6 +68,7 @@
         scenarioName: document.getElementById('scenarioName'),
         scenarioProtocol: document.getElementById('scenarioProtocol'),
         scenarioNetwork: document.getElementById('scenarioNetwork'),
+        langSelect: document.getElementById('langSelect'),
         nodesCount: document.getElementById('nodesCount'),
         edgesCount: document.getElementById('edgesCount'),
         nodePanel: document.getElementById('nodePanel'),
@@ -156,6 +157,9 @@
 
     let attackCatalog = [];
     let attackCatalogLoaded = false;
+    let activeLayout = null;
+
+    const t = (key, vars) => (window.I18N ? window.I18N.t(key, vars) : key);
 
     function showToast(message, isError = false) {
         DOM.toast.textContent = message;
@@ -190,12 +194,12 @@
         } catch (err) {
             attackCatalog = [];
             attackCatalogLoaded = false;
-            showToast('No se pudo cargar el catálogo de ataques', true);
+            showToast(t('network.attackCatalogUnavailable'), true);
         }
     }
 
     function initHeader() {
-        DOM.scenarioName.textContent = state.scenarioId || 'Escenario';
+        DOM.scenarioName.textContent = state.scenarioId || t('network.title');
         DOM.scenarioProtocol.textContent = getProtocolConfig().name;
         DOM.scenarioProtocol.classList.remove('protocol-modbus', 'protocol-dnp3', 'protocol-iec104');
         DOM.scenarioProtocol.classList.add(`protocol-${state.protocol}`);
@@ -446,7 +450,7 @@
         try {
             return JSON.parse(value);
         } catch (err) {
-            showToast('JSON inválido en campos de protocolo', true);
+            showToast(t('network.invalidProtocolJson'), true);
             return {};
         }
     }
@@ -569,14 +573,14 @@
 
         const ipValue = DOM.nodeIp.value.trim();
         if (!ipaddr.isValid(ipValue)) {
-            showToast('IP inválida', true);
+            showToast(t('network.invalidIp'), true);
             return;
         }
         if (networkData?.ip_network) {
             const ip = ipaddr.parse(ipValue);
             const subnet = ipaddr.parseCIDR(networkData.ip_network);
             if (!ip.match(subnet)) {
-                showToast('IP fuera de la subred', true);
+                showToast(t('network.ipOutOfSubnet'), true);
                 return;
             }
         }
@@ -648,7 +652,7 @@
 
         state.selectedElement.data(data);
         applyRoleClass(state.selectedElement);
-        showToast('Nodo actualizado');
+        showToast(t('network.nodeUpdated'));
     }
 
     function populateEdgeForm(edge) {
@@ -713,7 +717,7 @@
         if (!messages || messages.length === 0) {
             const empty = document.createElement('div');
             empty.className = 'message-empty';
-            empty.textContent = 'No hay mensajes definidos para este enlace.';
+            empty.textContent = t('network.noMessages');
             DOM.messagesContainer.appendChild(empty);
             return;
         }
@@ -737,9 +741,9 @@
         const details = document.createElement('details');
         const summaryToggle = document.createElement('summary');
         summaryToggle.innerHTML = `
-            <span>Editar mensaje</span>
+            <span>${t('network.messageEdit')}</span>
             <span class="message-actions">
-                <button type="button" class="button button-secondary" data-action="remove-message">Eliminar</button>
+                <button type="button" class="button button-secondary" data-action="remove-message">${t('network.messageRemove')}</button>
             </span>
         `;
 
@@ -758,33 +762,33 @@
         if (state.protocol === 'dnp3') {
             return `
                 <div>
-                    <strong>${msg.operation_type || 'Operación DNP3'}</strong>
+                    <strong>${msg.operation_type || t('network.dnp3')}</strong>
                     <div class="message-meta">
-                        <span class="message-badge">Group ${msg.group || 0}</span>
-                        <span class="message-badge">Var ${msg.variation || 0}</span>
-                        <span class="message-badge">Index ${msg.index || 0}</span>
+                        <span class="message-badge">${t('network.messageSummaryGroup', { value: msg.group || 0 })}</span>
+                        <span class="message-badge">${t('network.messageSummaryVariation', { value: msg.variation || 0 })}</span>
+                        <span class="message-badge">${t('network.messageSummaryIndex', { value: msg.index || 0 })}</span>
                     </div>
                 </div>
                 <div class="message-meta">
-                    <span class="message-badge">${msg.ip || 'IP destino'}</span>
-                    <span class="message-badge">Port ${msg.port || 0}</span>
-                    <span class="message-badge">${msg.recurrent ? `Recurrente cada ${msg.interval || 0}s` : `T+${msg.timestamp || 0}s`}</span>
+                    <span class="message-badge">${msg.ip || t('network.messageIp')}</span>
+                    <span class="message-badge">${t('network.messageSummaryPort', { value: msg.port || 0 })}</span>
+                    <span class="message-badge">${msg.recurrent ? t('network.messageSummaryRecurrent', { value: msg.interval || 0 }) : t('network.messageSummaryOnce', { value: msg.timestamp || 0 })}</span>
                 </div>
             `;
         }
         if (state.protocol === 'iec104') {
             return `
                 <div>
-                    <strong>Type ID ${msg.type_id || 0}</strong>
+                    <strong>${t('network.messageTypeId')} ${msg.type_id || 0}</strong>
                     <div class="message-meta">
-                        <span class="message-badge">IOA ${msg.ioa || 0}</span>
-                        <span class="message-badge">COT ${msg.cot || 0}</span>
+                        <span class="message-badge">${t('network.messageIoa')} ${msg.ioa || 0}</span>
+                        <span class="message-badge">${t('network.messageCot')} ${msg.cot || 0}</span>
                     </div>
                 </div>
                 <div class="message-meta">
-                    <span class="message-badge">${msg.ip || 'IP destino'}</span>
-                    <span class="message-badge">Port ${msg.port || 0}</span>
-                    <span class="message-badge">${msg.recurrent ? `Recurrente cada ${msg.interval || 0}s` : `T+${msg.timestamp || 0}s`}</span>
+                    <span class="message-badge">${msg.ip || t('network.messageIp')}</span>
+                    <span class="message-badge">${t('network.messageSummaryPort', { value: msg.port || 0 })}</span>
+                    <span class="message-badge">${msg.recurrent ? t('network.messageSummaryRecurrent', { value: msg.interval || 0 }) : t('network.messageSummaryOnce', { value: msg.timestamp || 0 })}</span>
                 </div>
             `;
         }
@@ -792,15 +796,15 @@
             <div>
                 <strong>FC ${msg.function_code || 0}</strong>
                 <div class="message-meta">
-                    <span class="message-badge">Addr ${msg.start_address || 0}</span>
-                    <span class="message-badge">Count ${msg.count || 0}</span>
-                    <span class="message-badge">Slave ${msg.slave_id || 0}</span>
+                    <span class="message-badge">${t('network.messageSummaryAddr', { value: msg.start_address || 0 })}</span>
+                    <span class="message-badge">${t('network.messageSummaryCount', { value: msg.count || 0 })}</span>
+                    <span class="message-badge">${t('network.messageSummarySlave', { value: msg.slave_id || 0 })}</span>
                 </div>
             </div>
             <div class="message-meta">
-                <span class="message-badge">${msg.ip || 'IP destino'}</span>
-                <span class="message-badge">Port ${msg.port || 0}</span>
-                <span class="message-badge">${msg.recurrent ? `Recurrente cada ${msg.interval || 0}s` : `T+${msg.timestamp || 0}s`}</span>
+                <span class="message-badge">${msg.ip || t('network.messageIp')}</span>
+                <span class="message-badge">${t('network.messageSummaryPort', { value: msg.port || 0 })}</span>
+                <span class="message-badge">${msg.recurrent ? t('network.messageSummaryRecurrent', { value: msg.interval || 0 }) : t('network.messageSummaryOnce', { value: msg.timestamp || 0 })}</span>
             </div>
         `;
     }
@@ -809,30 +813,30 @@
         const baseFields = `
             <div class="form-row">
                 <div class="form-group">
-                    <label>Timestamp</label>
+                    <label>${t('network.messageTimestamp')}</label>
                     <input type="number" data-field="timestamp" data-index="${index}" value="${msg.timestamp || 0}">
                 </div>
                 <div class="form-group">
-                    <label>Recurrente</label>
+                    <label>${t('network.messageRecurrent')}</label>
                     <select data-field="recurrent" data-index="${index}">
-                        <option value="false"${msg.recurrent ? '' : ' selected'}>No</option>
-                        <option value="true"${msg.recurrent ? ' selected' : ''}>Sí</option>
+                        <option value="false"${msg.recurrent ? '' : ' selected'}>${t('common.no')}</option>
+                        <option value="true"${msg.recurrent ? ' selected' : ''}>${t('common.yes')}</option>
                     </select>
                 </div>
             </div>
             <div class="form-row">
                 <div class="form-group">
-                    <label>Intervalo (s)</label>
+                    <label>${t('network.messageInterval')}</label>
                     <input type="number" data-field="interval" data-index="${index}" value="${msg.interval || 0}">
                 </div>
                 <div class="form-group">
-                    <label>IP destino</label>
+                    <label>${t('network.messageIp')}</label>
                     <input type="text" data-field="ip" data-index="${index}" value="${msg.ip || ''}" placeholder="192.168.1.10">
                 </div>
             </div>
             <div class="form-row">
                 <div class="form-group">
-                    <label>Puerto destino</label>
+                    <label>${t('network.messagePort')}</label>
                     <input type="number" data-field="port" data-index="${index}" value="${msg.port || 0}">
                 </div>
             </div>
@@ -858,36 +862,36 @@
             return baseFields + `
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Operation type</label>
+                        <label>${t('network.messageOperationType')}</label>
                         <input type="text" list="dnp3OperationTypes" data-field="operation_type" data-index="${index}" value="${msg.operation_type || ''}">
                     </div>
                     <div class="form-group">
-                        <label>Group</label>
+                        <label>${t('network.messageGroup')}</label>
                         <input type="number" data-field="group" data-index="${index}" value="${msg.group || 0}">
                     </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Variation</label>
+                        <label>${t('network.messageVariation')}</label>
                         <input type="number" data-field="variation" data-index="${index}" value="${msg.variation || 0}">
                     </div>
                     <div class="form-group">
-                        <label>Index</label>
+                        <label>${t('network.messageIndex')}</label>
                         <input type="number" data-field="index" data-index="${index}" value="${msg.index || 0}">
                     </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Master ID</label>
+                        <label>${t('network.messageMasterId')}</label>
                         <input type="number" data-field="master_id" data-index="${index}" value="${msg.master_id || 1}">
                     </div>
                     <div class="form-group">
-                        <label>Outstation ID</label>
+                        <label>${t('network.messageOutstationId')}</label>
                         <input type="number" data-field="outstation_id" data-index="${index}" value="${msg.outstation_id || 1}">
                     </div>
                 </div>
                 <div class="form-group">
-                    <label>Value</label>
+                    <label>${t('network.messageValue')}</label>
                     <input type="text" data-field="value" data-index="${index}" value="${msg.value || ''}">
                 </div>
                 ${datalist}
@@ -898,26 +902,26 @@
             return baseFields + `
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Type ID</label>
+                        <label>${t('network.messageTypeId')}</label>
                         <input type="number" data-field="type_id" data-index="${index}" value="${msg.type_id || 0}">
                     </div>
                     <div class="form-group">
-                        <label>Common address</label>
+                        <label>${t('network.messageCommonAddress')}</label>
                         <input type="number" data-field="common_address" data-index="${index}" value="${msg.common_address || 1}">
                     </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label>IOA</label>
+                        <label>${t('network.messageIoa')}</label>
                         <input type="number" data-field="ioa" data-index="${index}" value="${msg.ioa || 1}">
                     </div>
                     <div class="form-group">
-                        <label>COT</label>
+                        <label>${t('network.messageCot')}</label>
                         <input type="number" data-field="cot" data-index="${index}" value="${msg.cot || 0}">
                     </div>
                 </div>
                 <div class="form-group">
-                    <label>Value</label>
+                    <label>${t('network.messageValue')}</label>
                     <input type="text" data-field="value" data-index="${index}" value="${msg.value || ''}">
                 </div>
             `;
@@ -926,26 +930,26 @@
         return baseFields + `
             <div class="form-row">
                 <div class="form-group">
-                    <label>Slave ID</label>
+                    <label>${t('network.messageSlaveId')}</label>
                     <input type="number" data-field="slave_id" data-index="${index}" value="${msg.slave_id || 0}">
                 </div>
                 <div class="form-group">
-                    <label>Function code</label>
+                    <label>${t('network.messageFunction')}</label>
                     <input type="number" data-field="function_code" data-index="${index}" value="${msg.function_code || 3}">
                 </div>
             </div>
             <div class="form-row">
                 <div class="form-group">
-                    <label>Start address</label>
+                    <label>${t('network.messageStartAddress')}</label>
                     <input type="text" data-field="start_address" data-index="${index}" value="${msg.start_address || 0}">
                 </div>
                 <div class="form-group">
-                    <label>Count</label>
+                    <label>${t('network.messageCount')}</label>
                     <input type="number" data-field="count" data-index="${index}" value="${msg.count || 1}">
                 </div>
             </div>
             <div class="form-group">
-                <label>Values</label>
+                <label>${t('network.messageValues')}</label>
                 <input type="text" data-field="values" data-index="${index}" value="${Array.isArray(msg.values) ? msg.values.join(',') : ''}" placeholder="10,12,14">
             </div>
         `;
@@ -1007,13 +1011,13 @@
         const masterOptions = getMasterOptions();
         if (masterOptions.length === 0) {
             DOM.attacksPanel.classList.remove('hidden');
-            DOM.attacksList.innerHTML = '<div class="message-empty">No hay masters configurados.</div>';
+            DOM.attacksList.innerHTML = `<div class="message-empty">${t('network.noMastersConfigured')}</div>`;
             return;
         }
 
         if (!attackCatalogLoaded) {
             DOM.attacksPanel.classList.remove('hidden');
-            DOM.attacksList.innerHTML = '<div class="message-empty">Cargando catálogo de ataques...</div>';
+            DOM.attacksList.innerHTML = `<div class="message-empty">${t('network.loadingAttackCatalog')}</div>`;
             return;
         }
 
@@ -1026,12 +1030,12 @@
         renderAttackMasterSelect(masterOptions, masterNode);
 
         if (slaveOptions.length === 0) {
-            DOM.attacksList.innerHTML = '<div class="message-empty">Agrega al menos un slave para asignar ataques.</div>';
+            DOM.attacksList.innerHTML = `<div class="message-empty">${t('network.addSlaveForAttacks')}</div>`;
             return;
         }
 
         if (catalog.length === 0) {
-            DOM.attacksList.innerHTML = '<div class="message-empty">No hay ataques disponibles para este protocolo.</div>';
+            DOM.attacksList.innerHTML = `<div class="message-empty">${t('network.noAttacksForProtocol')}</div>`;
             return;
         }
 
@@ -1097,42 +1101,42 @@
                 </div>
                 <label class="attack-toggle">
                     <input type="checkbox" data-attack-field="enabled" ${enabled ? 'checked' : ''}>
-                    Activar
+                    ${t('network.attackEnable')}
                 </label>
             </div>
             <details class="attack-details" ${detailsOpen}>
-                <summary>Configurar ataque</summary>
+                <summary>${t('network.attackConfigure')}</summary>
                 <div class="attack-section">
-                    <h4>Destino</h4>
+                    <h4>${t('network.attackDestination')}</h4>
                     <div class="attack-body">
                         <div class="form-group">
-                            <label>Target (slave)</label>
+                            <label>${t('network.attackTarget')}</label>
                             <select data-attack-field="target_id">
-                                <option value="">Selecciona nodo</option>
+                                <option value="">${t('network.selectNode')}</option>
                                 ${slaveOptions.map(opt => `<option value="${opt.id}" ${opt.id === targetId ? 'selected' : ''}>${opt.label}</option>`).join('')}
                             </select>
                         </div>
                     </div>
                 </div>
                 <div class="attack-section">
-                    <h4>Planificación</h4>
+                    <h4>${t('network.attackSchedule')}</h4>
                     <div class="attack-body">
                         <div class="form-group">
-                            <label>Inicio (s)</label>
-                            <input type="number" min="0" data-attack-field="start_time" value="${startTime}">
+                            <label>${t('network.attackStart')}</label>
+                            <input type="number" min="0" step="0.1" data-attack-field="start_time" value="${startTime}">
                         </div>
                         <div class="form-group">
-                            <label>Intervalo (s)</label>
-                            <input type="number" min="0" data-attack-field="interval" value="${interval}">
+                            <label>${t('network.attackInterval')}</label>
+                            <input type="number" min="0" step="0.1" data-attack-field="interval" value="${interval}">
                         </div>
                         <div class="form-group">
-                            <label>Repeticiones</label>
+                            <label>${t('network.attackCount')}</label>
                             <input type="number" min="1" data-attack-field="count" value="${count}">
                         </div>
                     </div>
                 </div>
                 <div class="attack-section">
-                    <h4>Parámetros</h4>
+                    <h4>${t('network.attackParams')}</h4>
                     ${buildAttackParams(attack, current?.parameters || {})}
                 </div>
             </details>
@@ -1143,7 +1147,7 @@
 
     function buildAttackParams(attack, params) {
         if (!Array.isArray(attack.parameters) || attack.parameters.length === 0) {
-            return '<div class="message-empty">Sin parámetros adicionales.</div>';
+            return `<div class="message-empty">${t('network.attackNoParams')}</div>`;
         }
         const fields = attack.parameters.map(param => buildAttackParamField(param, params)).join('');
         return `<div class="attack-body">${fields}</div>`;
@@ -1193,8 +1197,12 @@
                     data.enabled = field.checked;
                     return;
                 }
-                if (['start_time', 'interval', 'count'].includes(key)) {
-                    data[key] = Number(field.value) || 0;
+                if (['start_time', 'interval'].includes(key)) {
+                    data[key] = parseNumberInput(field.value, 0);
+                    return;
+                }
+                if (key === 'count') {
+                    data.count = Math.max(1, Math.round(parseNumberInput(field.value, 1)));
                     return;
                 }
                 if (key === 'target_id') {
@@ -1233,18 +1241,18 @@
     function saveAttacksToSelectedMaster() {
         const masterId = DOM.attacksMasterSelect?.value || state.attacksMasterId;
         if (!masterId) {
-            showToast('Selecciona un master para guardar ataques', true);
+            showToast(t('network.selectMasterToSave'), true);
             return;
         }
         const node = state.cy.$id(masterId);
         if (!node.length) {
-            showToast('Master no encontrado', true);
+            showToast(t('network.masterNotFound'), true);
             return;
         }
         const data = node.data();
         data.attacks = collectAttacksFromDOM();
         node.data(data);
-        showToast('Ataques guardados en el master');
+        showToast(t('network.attacksSaved'));
     }
 
     function parseParamInputValue(paramType, value) {
@@ -1268,6 +1276,15 @@
         return value;
     }
 
+    function parseNumberInput(value, fallback = 0) {
+        if (value === null || value === undefined) {
+            return fallback;
+        }
+        const normalized = String(value).replace(',', '.');
+        const parsed = Number(normalized);
+        return Number.isNaN(parsed) ? fallback : parsed;
+    }
+
     function toggleAttackDetails(open) {
         if (!DOM.attacksList) return;
         DOM.attacksList.querySelectorAll('.attack-details').forEach(details => {
@@ -1282,7 +1299,7 @@
         const defaults = buildMessageDefaults(context);
         const normalized = messages.map(message => applyMessageDefaults(message, defaults));
         state.selectedElement.data('messages', normalized);
-        showToast('Enlace actualizado');
+        showToast(t('network.edgeUpdated'));
     }
 
     function handleCanvasTap(evt) {
@@ -1295,7 +1312,7 @@
                 const src = state.selectedElement;
                 const dst = evt.target;
                 if (src.data('role') === dst.data('role')) {
-                    showToast('Los enlaces deben conectar roles distintos', true);
+                    showToast(t('network.linksMustConnectRoles'), true);
                     return;
                 }
                 const source = src.data('role') === 'master' ? src.id() : dst.id();
@@ -1331,7 +1348,62 @@
     }
 
     function layoutGraph() {
-        state.cy.layout({ name: 'cose', animate: true, padding: 80 }).run();
+        if (!state.cy) return;
+        if (state.cy.nodes().length <= 1) {
+            return;
+        }
+        if (activeLayout) {
+            activeLayout.stop();
+        }
+        state.cy.stop();
+        const zoom = state.cy.zoom();
+        const pan = state.cy.pan();
+        const width = state.cy.width();
+        const height = state.cy.height();
+        const padding = 40;
+        const viewX1 = -pan.x / zoom;
+        const viewY1 = -pan.y / zoom;
+        const viewX2 = viewX1 + width / zoom;
+        const viewY2 = viewY1 + height / zoom;
+        const boundingBox = {
+            x1: viewX1 + padding,
+            y1: viewY1 + padding,
+            x2: viewX2 - padding,
+            y2: viewY2 - padding
+        };
+        const nodes = state.cy.nodes();
+        const startPositions = new Map();
+        nodes.forEach((node) => {
+            startPositions.set(node.id(), { ...node.position() });
+        });
+
+        activeLayout = state.cy.layout({
+            name: 'cose',
+            animate: false,
+            fit: false,
+            randomize: false,
+            boundingBox,
+            componentSpacing: 60,
+            nodeRepulsion: 5000,
+            idealEdgeLength: 120,
+            gravity: 0.2
+        });
+        activeLayout.run();
+        const targetPositions = new Map();
+        nodes.forEach((node) => {
+            const target = node.connectedEdges().length === 0
+                ? startPositions.get(node.id())
+                : node.position();
+            targetPositions.set(node.id(), { x: target.x, y: target.y });
+        });
+        nodes.positions((node) => startPositions.get(node.id()));
+        nodes.forEach((node) => {
+            node.animate(
+                { position: targetPositions.get(node.id()) },
+                { duration: 600, easing: 'ease-out' }
+            );
+        });
+        activeLayout = null;
     }
 
     function openRunModal() {
@@ -1352,7 +1424,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
-            showToast('Escenario guardado');
+            showToast(t('network.scenarioSaved'));
         } catch (err) {
             showToast(err.message, true);
         }
@@ -1419,7 +1491,7 @@
                     stopPolling();
                     setTimeout(() => {
                         closeRunOverlay();
-                        showToast('Simulación completada');
+                        showToast(t('network.simulationCompleted'));
                     }, 800);
                 }
             }
@@ -1445,7 +1517,7 @@
     async function stopRun() {
         try {
             await fetchJSON('/api/run', { method: 'DELETE' });
-            showToast('Simulación detenida');
+            showToast(t('network.simulationStopped'));
         } catch (err) {
             showToast(err.message, true);
         } finally {
@@ -1531,11 +1603,85 @@
         DOM.stopRun.addEventListener('click', stopRun);
     }
 
+    function setupLanguage() {
+        if (!DOM.langSelect || !window.I18N) return;
+        DOM.langSelect.value = window.I18N.getLang();
+        DOM.langSelect.addEventListener('change', (event) => {
+            window.I18N.setLang(event.target.value);
+        });
+        window.I18N.applyTranslations(document);
+        window.I18N.onChange(() => {
+            window.I18N.applyTranslations(document);
+            if (state.selectedElement && state.selectedElement.isEdge()) {
+                populateEdgeForm(state.selectedElement);
+                return;
+            }
+            if (state.selectedElement && state.selectedElement.isNode()) {
+                renderAttacksPanel(state.selectedElement.data());
+                return;
+            }
+            if (DOM.attacksPanel && !DOM.attacksPanel.classList.contains('hidden')) {
+                renderAttacksPanel();
+            }
+        });
+    }
+
+    function exposeE2E() {
+        const params = new URLSearchParams(window.location.search);
+        if (!params.has('e2e')) return;
+        window.__ICS_E2E__ = {
+            selectNode(id) {
+                if (!state.cy) return false;
+                const node = state.cy.$id(id);
+                if (!node.length) return false;
+                selectElement(node);
+                return true;
+            },
+            selectEdge(sourceId, targetId) {
+                if (!state.cy) return false;
+                const edge = state.cy.edges().filter(item => (
+                    item.data('source') === sourceId && item.data('target') === targetId
+                ));
+                if (!edge.length) return false;
+                selectElement(edge[0]);
+                return true;
+            },
+            getNodeData(id) {
+                if (!state.cy) return null;
+                const node = state.cy.$id(id);
+                return node.length ? node.data() : null;
+            },
+            getEdgeData(sourceId, targetId) {
+                if (!state.cy) return null;
+                const edge = state.cy.edges().filter(item => (
+                    item.data('source') === sourceId && item.data('target') === targetId
+                ));
+                return edge.length ? edge[0].data() : null;
+            },
+            getScenario() {
+                return exportScenario();
+            },
+            getCounts() {
+                return { nodes: state.cy.nodes().length, edges: state.cy.edges().length };
+            },
+            addEdge(sourceId, targetId) {
+                if (!state.cy) return false;
+                const src = state.cy.$id(sourceId);
+                const dst = state.cy.$id(targetId);
+                if (!src.length || !dst.length) return false;
+                addEdge(sourceId, targetId);
+                return true;
+            }
+        };
+    }
+
     function init() {
         initHeader();
         initCytoscape();
         updateCounts();
         bindEvents();
+        setupLanguage();
+        exposeE2E();
         loadAttackCatalog().then(() => {
             if (state.selectedElement && state.selectedElement.isNode()) {
                 renderAttacksPanel(state.selectedElement.data());

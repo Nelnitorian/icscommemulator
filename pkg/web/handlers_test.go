@@ -69,7 +69,7 @@ type fakeRunner struct {
 	lastConfig  string
 }
 
-func (f *fakeRunner) Start(_ string, _ int, _ string, configPath string, _ *runner.NetworkEmulation) (string, error) {
+func (f *fakeRunner) Start(_ string, _ int, _ string, configPath string) (string, error) {
 	f.startCalled = true
 	f.lastConfig = configPath
 	return filepath.Join(configPath, "outputs", "fake.pcap"), f.startErr
@@ -274,25 +274,6 @@ func TestHandleNetworksDeleteNetwork(t *testing.T) {
 func TestHandleRunValidationErrors(t *testing.T) {
 	handlers := NewHandlers(&fakeStorage{}, newTestScenarioService(t, &fakeRunner{}))
 	req := httptest.NewRequest(http.MethodPost, "/api/run", bytes.NewReader([]byte(`{"ip_network":"192.168.1.0/24","simulation_time":1}`)))
-	rec := httptest.NewRecorder()
-
-	handlers.HandleRun(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected status 400, got %d", rec.Code)
-	}
-}
-
-func TestHandleRunInvalidNetworkConfig(t *testing.T) {
-	handlers := NewHandlers(&fakeStorage{}, newTestScenarioService(t, &fakeRunner{}))
-	req := httptest.NewRequest(http.MethodPost, "/api/run", bytes.NewReader([]byte(`{
-		"protocol":"modbus",
-		"ip_network":"192.168.1.0/24",
-		"nodes":[],
-		"edges":[],
-		"simulation_time":1,
-		"network":{"packet_loss_percent":150}
-	}`)))
 	rec := httptest.NewRecorder()
 
 	handlers.HandleRun(rec, req)

@@ -27,12 +27,6 @@ type Config struct {
 	SimulationTime    int
 	OutputFile        string
 	ConfigPath        string
-	NetworkEmulation  *NetworkEmulation
-}
-
-type NetworkEmulation struct {
-	RateLimitMBps     float64
-	PacketLossPercent float64
 }
 
 type Runner struct {
@@ -47,8 +41,6 @@ type Runner struct {
 
 	tcpdumpCmd      *exec.Cmd
 	networkPrepared bool
-	tcApplied       bool
-	tcInterface     string
 
 	filePath     string
 	configPath   string
@@ -78,7 +70,7 @@ func GetGlobalRunner() *Runner {
 	return globalRunner
 }
 
-func (r *Runner) Configure(dockerComposePath string, simulationTime int, outputFile, configPath string, networkEmulation *NetworkEmulation) {
+func (r *Runner) Configure(dockerComposePath string, simulationTime int, outputFile, configPath string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -91,7 +83,6 @@ func (r *Runner) Configure(dockerComposePath string, simulationTime int, outputF
 		SimulationTime:    simulationTime,
 		OutputFile:        outputFile,
 		ConfigPath:        configPath,
-		NetworkEmulation:  networkEmulation,
 	}
 
 	r.filePath = dockerComposePath
@@ -178,47 +169,6 @@ func (r *Runner) PrepareNetwork() (string, error) {
 
 	r.networkPrepared = true
 	return r.GetSystemInterfaceName(networkName)
-}
-
-func (r *Runner) applyTrafficControl(interfaceName string) error {
-	if r.config == nil || r.config.NetworkEmulation == nil {
-		return nil
-	}
-
-	emulation := r.config.NetworkEmulation
-	if emulation.RateLimitMBps <= 0 && emulation.PacketLossPercent <= 0 {
-		return nil
-	}
-
-	args := []string{"qdisc", "replace", "dev", interfaceName, "root", "netem"}
-	if emulation.PacketLossPercent > 0 {
-		args = append(args, "loss", fmt.Sprintf("%.3f%%", emulation.PacketLossPercent))
-	}
-	if emulation.RateLimitMBps > 0 {
-		rateMbit := emulation.RateLimitMBps * 8
-		args = append(args, "rate", fmt.Sprintf("%.3fmbit", rateMbit))
-	}
-
-	cmd := exec.Command("tc", args...)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to apply traffic control: %w\nOutput: %s", err, string(output))
-	}
-
-	r.tcApplied = true
-	r.tcInterface = interfaceName
-	return nil
-}
-
-func (r *Runner) clearTrafficControl() {
-	if !r.tcApplied || r.tcInterface == "" {
-		return
-	}
-
-	cmd := exec.Command("tc", "qdisc", "del", "dev", r.tcInterface, "root")
-	_ = cmd.Run()
-
-	r.tcApplied = false
-	r.tcInterface = ""
 }
 
 func (r *Runner) GetSystemInterfaceName(dockerNetworkName string) (string, error) {
@@ -400,9 +350,6 @@ func (r *Runner) Run() error {
 	}
 
 	if prepared {
-		if err := r.applyTrafficControl(systemInterface); err != nil {
-			return err
-		}
 		if err := r.StartTcpdump(r.ctx, systemInterface); err != nil {
 			return fmt.Errorf("failed to start tcpdump: %w", err)
 		}
@@ -416,7 +363,6 @@ func (r *Runner) Run() error {
 
 	defer func() {
 		r.StopDockerCompose()
-		r.clearTrafficControl()
 		r.CleanConfigFolder()
 	}()
 
@@ -426,13 +372,11 @@ func (r *Runner) Run() error {
 			return fmt.Errorf("failed to get docker network interface: %w", err)
 		}
 
-		systemInterface, err = r.GetSystemInterfaceName(networkName)
-		if err != nil {
-			return fmt.Errorf("failed to get system interface name: %w", err)
-		}
-
-		if err := r.applyTrafficControl(systemInterface); err != nil {
-			return err
+		if systemInterface == "" {
+			systemInterface, err = r.GetSystemInterfaceName(networkName)
+			if err != nil {
+				return fmt.Errorf("failed to get system interface name: %w", err)
+			}
 		}
 
 		err = r.StartTcpdump(r.ctx, systemInterface)
@@ -505,8 +449,6 @@ func (r *Runner) Stop() error {
 		log.Printf("Error stopping docker compose: %v", err)
 	}
 
-	r.clearTrafficControl()
-
 	if err := r.CleanConfigFolder(); err != nil {
 		log.Printf("Error cleaning config folder: %v", err)
 	}
@@ -521,7 +463,7 @@ func Start(dockerComposePath string, simulationTime int, outputFile, configPath 
 		return "", fmt.Errorf("a scenario is already running")
 	}
 
-	runner.Configure(dockerComposePath, simulationTime, outputFile, configPath, nil)
+	runner.Configure(dockerComposePath, simulationTime, outputFile, configPath)
 
 	go func() {
 		if err := runner.Run(); err != nil {

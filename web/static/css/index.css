@@ -295,6 +295,20 @@ body {
     transform: translateY(0);
 }
 
+.lang-switch {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.language-select {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0.35rem 0.6rem;
+    background: #fff;
+    color: var(--text-primary);
+}
+
 @media (max-width: 768px) {
     .app-header {
         flex-direction: column;

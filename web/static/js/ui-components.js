@@ -3,6 +3,7 @@ window.App = window.App || {};
 (function () {
     'use strict';
     const CONSTANTS = App.CONSTANTS;
+    const t = (key, vars) => (window.I18N ? window.I18N.t(key, vars) : key);
 
     class UIUtils {
         static showError(message) {
@@ -200,7 +201,7 @@ window.App = window.App || {};
             this.messagesData = messages.length > 0 ? messages : [this.getEmptyMessage()];
             this.container.innerHTML = `
         <div class="messages-list">${this.messagesData.map((m, i) => this.renderMessageCard(m, i)).join('')}</div>
-        <button type="button" class="btn-add-message" onclick="messagesUI.addMessage()">Add</button>
+        <button type="button" class="btn-add-message" onclick="messagesUI.addMessage()">${t('common.add')}</button>
       `;
             if (App.PopupTracker) App.PopupTracker.updatePosition('center');
         }

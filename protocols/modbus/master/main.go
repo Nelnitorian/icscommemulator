@@ -16,14 +16,14 @@ import (
 )
 
 type Message struct {
-	Timestamp    int
+	Timestamp    float64
 	IP           string
 	Port         int
 	FunctionCode int
 	StartAddress int
 	SlaveID      int
 	Recurrent    bool
-	Interval     int
+	Interval     float64
 	Count        int
 	Values       []int
 }
@@ -34,9 +34,9 @@ type MasterConfig struct {
 }
 
 type MessageConfig struct {
-	Timestamp    int           `yaml:"timestamp"`
+	Timestamp    float64       `yaml:"timestamp"`
 	Recurrent    bool          `yaml:"recurrent"`
-	Interval     int           `yaml:"interval"`
+	Interval     float64       `yaml:"interval"`
 	IP           string        `yaml:"ip"`
 	Port         int           `yaml:"port"`
 	SlaveID      int           `yaml:"slave_id"`
@@ -245,7 +245,7 @@ func (m *ModbusMaster) loop() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	currentTime := 0
+	currentTime := 0.0
 
 	for {
 		select {
@@ -269,7 +269,7 @@ func (m *ModbusMaster) loop() {
 
 		delay := msg.Timestamp - currentTime
 		if delay > 0 {
-			time.Sleep(time.Duration(delay) * time.Second)
+			time.Sleep(time.Duration(delay * float64(time.Second)))
 		}
 		currentTime = msg.Timestamp
 

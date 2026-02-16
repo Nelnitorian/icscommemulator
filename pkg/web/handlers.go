@@ -6,8 +6,10 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
-	"math"
 
 	"icscommemulator/pkg/adapter"
 	"icscommemulator/pkg/logger"
@@ -56,6 +58,74 @@ func (h *Handlers) HandleNetworks(w http.ResponseWriter, r *http.Request) {
 	default:
 		sendError(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func (h *Handlers) HandleImportNetwork(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		sendError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if err := r.ParseMultipartForm(25 << 20); err != nil {
+		sendError(w, fmt.Sprintf("Failed to parse form: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		sendError(w, "Scenario file is required", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	name := strings.TrimSpace(r.FormValue("name"))
+	if name == "" {
+		name = strings.TrimSuffix(header.Filename, filepath.Ext(header.Filename))
+	}
+	name = sanitizeScenarioName(name)
+	if name == "" {
+		sendError(w, "Scenario name is required", http.StatusBadRequest)
+		return
+	}
+
+	if h.scenarioStorage.CheckScenarioExists(name) {
+		sendError(w, "Project already exists", http.StatusBadRequest)
+		return
+	}
+
+	tmpFile, err := os.CreateTemp("", "ics-import-*"+filepath.Ext(header.Filename))
+	if err != nil {
+		sendError(w, fmt.Sprintf("Failed to create temp file: %v", err), http.StatusInternalServerError)
+		return
+	}
+	defer os.Remove(tmpFile.Name())
+	defer tmpFile.Close()
+
+	if _, err := io.Copy(tmpFile, file); err != nil {
+		sendError(w, fmt.Sprintf("Failed to store scenario file: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	if err := scenario.ImportScenarioFile(name, tmpFile.Name()); err != nil {
+		sendError(w, fmt.Sprintf("Failed to import scenario: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	sendJSON(w, APIResponse{
+		Status:  200,
+		Message: fmt.Sprintf("Scenario imported as %s", name),
+	})
+}
+
+func sanitizeScenarioName(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ""
+	}
+	re := regexp.MustCompile(`[^a-zA-Z0-9_-]+`)
+	name = re.ReplaceAllString(name, "_")
+	name = strings.Trim(name, "_-")
+	return name
 }
 
 func (h *Handlers) handleGetNetworks(w http.ResponseWriter, r *http.Request) {
@@ -205,17 +275,6 @@ func (h *Handlers) handleRunScenario(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Network != nil {
-		if math.IsNaN(req.Network.RateLimitMBps) || req.Network.RateLimitMBps < 0 {
-			sendError(w, "rate_limit_mbytes_per_sec must be >= 0", http.StatusBadRequest)
-			return
-		}
-		if math.IsNaN(req.Network.PacketLossPercent) || req.Network.PacketLossPercent < 0 || req.Network.PacketLossPercent > 100 {
-			sendError(w, "packet_loss_percent must be between 0 and 100", http.StatusBadRequest)
-			return
-		}
-	}
-
 	cytoscapeData := adapter.CytoscapeData{
 		Protocol:  req.Protocol,
 		IPNetwork: req.IPNetwork,
@@ -223,19 +282,9 @@ func (h *Handlers) handleRunScenario(w http.ResponseWriter, r *http.Request) {
 		Edges:     req.Edges,
 	}
 
-	// Keep conversion/validation in the service layer.
-	var networkEmulation *service.NetworkEmulation
-	if req.Network != nil {
-		networkEmulation = &service.NetworkEmulation{
-			RateLimitMBps:     req.Network.RateLimitMBps,
-			PacketLossPercent: req.Network.PacketLossPercent,
-		}
-	}
-
 	result, err := h.scenarioService.RunScenario(service.RunScenarioRequest{
 		CytoscapeData:  cytoscapeData,
 		SimulationTime: req.SimulationTime,
-		Network:        networkEmulation,
 	})
 
 	if err != nil {

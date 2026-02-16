@@ -11,7 +11,7 @@ import (
 )
 
 type Service interface {
-	Start(dockerComposePath string, simulationTime int, outputFile, configPath string, networkEmulation *NetworkEmulation) (string, error)
+	Start(dockerComposePath string, simulationTime int, outputFile, configPath string) (string, error)
 	Stop() error
 	GetStatus() Status
 	IsRunning() bool
@@ -30,7 +30,7 @@ func NewService() Service {
 	}
 }
 
-func (s *service) Start(dockerComposePath string, simulationTime int, outputFile, configPath string, networkEmulation *NetworkEmulation) (string, error) {
+func (s *service) Start(dockerComposePath string, simulationTime int, outputFile, configPath string) (string, error) {
 	s.mu.Lock()
 	if s.isRunning {
 		s.mu.Unlock()
@@ -40,7 +40,7 @@ func (s *service) Start(dockerComposePath string, simulationTime int, outputFile
 	s.currentError = nil
 	s.mu.Unlock()
 
-	s.runner.Configure(dockerComposePath, simulationTime, outputFile, configPath, networkEmulation)
+	s.runner.Configure(dockerComposePath, simulationTime, outputFile, configPath)
 
 	go func() {
 		if err := s.runner.Run(); err != nil {

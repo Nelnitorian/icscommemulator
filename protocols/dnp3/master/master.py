@@ -70,7 +70,7 @@ class DNP3Operation:
     """Represents a single DNP3 operation from YAML/CSV configuration."""
 
     def __init__(self, raw: Dict[str, Any]):
-        self.timestamp = _to_int(raw.get("timestamp"), 0) or 0
+        self.timestamp = _to_float(raw.get("timestamp"), 0.0) or 0.0
         self.ip = raw.get("ip") or ""
         self.port = _to_int(raw.get("port"), 0) or 0
         self.operation_type = (raw.get("operation_type") or "").strip()

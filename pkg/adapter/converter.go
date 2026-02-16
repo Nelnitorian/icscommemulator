@@ -37,14 +37,25 @@ func (c *Converter) CytoscapeToSimplified(data CytoscapeData) (map[string]interf
 		sourceID := edge.Data.Source
 		targetID := edge.Data.Target
 
-		targetNode, exists := nodesByID[targetID]
-		if !exists {
+		sourceNode, sourceExists := nodesByID[sourceID]
+		targetNode, targetExists := nodesByID[targetID]
+		if !sourceExists || !targetExists {
 			continue
 		}
 
+		masterNode := sourceNode
+		slaveNode := targetNode
+		if sourceNode.Role == "master" && targetNode.Role == "slave" {
+			masterNode = sourceNode
+			slaveNode = targetNode
+		} else if sourceNode.Role == "slave" && targetNode.Role == "master" {
+			masterNode = targetNode
+			slaveNode = sourceNode
+		}
+
 		for _, msg := range edge.Data.Messages {
-			msgMap := c.messageToMap(msg, targetNode)
-			masterMessages[sourceID] = append(masterMessages[sourceID], msgMap)
+			msgMap := c.messageToMap(msg, slaveNode)
+			masterMessages[masterNode.ID] = append(masterMessages[masterNode.ID], msgMap)
 		}
 	}
 

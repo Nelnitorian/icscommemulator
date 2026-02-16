@@ -13,9 +13,9 @@ import (
 
 // Message represents a message configuration for master nodes (generic)
 type Message struct {
-	Timestamp int    `json:"timestamp" yaml:"timestamp"`
-	Recurrent bool   `json:"recurrent" yaml:"recurrent"`
-	Interval  int    `json:"interval,omitempty" yaml:"interval,omitempty"`
+	Timestamp float64 `json:"timestamp" yaml:"timestamp"`
+	Recurrent bool    `json:"recurrent" yaml:"recurrent"`
+	Interval  float64 `json:"interval,omitempty" yaml:"interval,omitempty"`
 	IP        string `json:"ip" yaml:"ip"`
 	Port      int    `json:"port" yaml:"port"`
 

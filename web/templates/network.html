@@ -1,19 +1,21 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
   <meta charset="UTF-8">
-  <title>Editor de red</title>
+  <title data-i18n="network.title">Editor de escenarios</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="/static/js/lib/cytoscape.3.18.1.min.js"></script>
   <script src="/static/js/lib/ipaddr.min.js"></script>
   <link rel="stylesheet" href="/static/css/roboto.css">
   <link rel="stylesheet" href="/static/css/network.css">
 </head>
+
 <body>
   <div class="app-shell">
     <header class="app-header">
       <div class="header-left">
-        <h1>Editor de escenarios</h1>
+        <h1 data-i18n="network.title">Editor de escenarios</h1>
         <div class="header-meta">
           <span class="badge badge-dark" id="scenarioName"></span>
           <span class="badge badge-protocol" id="scenarioProtocol"></span>
@@ -21,258 +23,286 @@
         </div>
       </div>
       <div class="header-actions">
-        <button class="button" id="btnAddNode">➕ Nodo</button>
-        <button class="button" id="btnLayout">🧭 Layout</button>
-        <button class="button button-primary" id="btnSave">💾 Guardar</button>
-        <button class="button button-success" id="btnRun">▶ Ejecutar</button>
+        <button class="button" id="btnAddNode"><span aria-hidden="true">➕</span> <span
+            data-i18n="network.addNode">Nodo</span></button>
+        <button class="button" id="btnLayout"><span aria-hidden="true">🧭</span> <span
+            data-i18n="network.layout">Layout</span></button>
+        <button class="button button-primary" id="btnSave"><span aria-hidden="true">💾</span> <span
+            data-i18n="common.save">Guardar</span></button>
+        <button class="button button-success" id="btnRun"><span aria-hidden="true">▶</span> <span
+            data-i18n="network.run">Ejecutar</span></button>
+        <div class="lang-switch">
+          <label for="langSelect" data-i18n="common.language">Idioma</label>
+          <select id="langSelect" class="language-select">
+            <option value="es" data-i18n="common.spanish">Español</option>
+            <option value="en" data-i18n="common.english">English</option>
+          </select>
+        </div>
       </div>
     </header>
 
     <div class="app-body">
       <aside class="side-panel">
         <section class="panel" id="scenarioPanel">
-          <h2>Resumen</h2>
+          <h2 data-i18n="network.summary">Resumen</h2>
           <div class="info-grid">
             <div>
-              <span class="label">Nodos</span>
+              <span class="label" data-i18n="network.nodes">Nodos</span>
               <span id="nodesCount">0</span>
             </div>
             <div>
-              <span class="label">Enlaces</span>
+              <span class="label" data-i18n="network.edges">Enlaces</span>
               <span id="edgesCount">0</span>
             </div>
           </div>
           <div class="helper-block">
-            <p><strong>Gestos:</strong> click en nodo para seleccionar; click en otro nodo para crear enlace.</p>
-            <p><strong>Teclas:</strong> Supr/Delete para borrar; Esc para limpiar selección.</p>
+            <p><strong data-i18n="network.gestures">Gestos</strong>: <span data-i18n="network.gesturesHint">click en
+                nodo para seleccionar; click en otro nodo para crear enlace.</span></p>
+            <p><strong data-i18n="network.keys">Teclas</strong>: <span data-i18n="network.keysHint">Supr/Delete para
+                borrar; Esc para limpiar selección.</span></p>
           </div>
         </section>
 
         <section class="panel hidden" id="nodePanel">
           <div class="panel-title-row">
-            <h2>Configuración de nodo</h2>
-            <button type="button" class="button button-secondary" id="jumpAttacks">Ver ataques</button>
+            <h2 data-i18n="network.nodeConfig">Configuración de nodo</h2>
+            <button type="button" class="button button-secondary" id="jumpAttacks" data-i18n="network.viewAttacks">Ver
+              ataques</button>
           </div>
           <form id="nodeForm">
             <div class="form-group">
-              <label for="nodeName">Nombre</label>
+              <label for="nodeName" data-i18n="network.nodeName">Nombre</label>
               <input type="text" id="nodeName" name="nodeName" required>
             </div>
             <div class="form-group">
-              <label for="nodeRole">Rol</label>
+              <label for="nodeRole" data-i18n="network.nodeRole">Rol</label>
               <select id="nodeRole" name="nodeRole">
-                <option value="master">Master</option>
-                <option value="slave">Slave</option>
+                <option value="master" data-i18n="common.master">Master</option>
+                <option value="slave" data-i18n="common.slave">Slave</option>
               </select>
             </div>
             <div class="form-group">
-              <label for="nodeIp">IP</label>
+              <label for="nodeIp" data-i18n="network.nodeIp">IP</label>
               <input type="text" id="nodeIp" name="nodeIp" required>
             </div>
             <div class="form-group">
-              <label for="nodePort">Puerto</label>
+              <label for="nodePort" data-i18n="network.nodePort">Puerto</label>
               <input type="text" id="nodePort" name="nodePort">
             </div>
             <div class="form-group">
-              <label for="nodeComment">Comentario</label>
+              <label for="nodeComment" data-i18n="network.nodeComment">Comentario</label>
               <textarea id="nodeComment" name="nodeComment" rows="2"></textarea>
             </div>
 
             <div class="protocol-block" id="modbusBlock">
-              <h3>Modbus</h3>
+              <h3 data-i18n="network.modbus">Modbus</h3>
               <div class="form-group">
-                <label for="nodeSlaveId">Slave ID</label>
+                <label for="nodeSlaveId" data-i18n="network.modbusSlaveId">Slave ID</label>
                 <input type="number" id="nodeSlaveId" name="nodeSlaveId" min="1">
               </div>
               <div class="form-group">
-                <label for="holdingRegisters">Holding registers</label>
-                <textarea id="holdingRegisters" rows="3" placeholder="0:10\n1:42"></textarea>
+                <label for="holdingRegisters" data-i18n="network.modbusHolding">Holding registers</label>
+                <textarea id="holdingRegisters" rows="3" placeholder="0:10&#10;1:42"></textarea>
               </div>
               <div class="form-group">
-                <label for="inputRegisters">Input registers</label>
-                <textarea id="inputRegisters" rows="3" placeholder="0:11\n1:12"></textarea>
+                <label for="inputRegisters" data-i18n="network.modbusInput">Input registers</label>
+                <textarea id="inputRegisters" rows="3" placeholder="0:11&#10;1:12"></textarea>
               </div>
               <div class="form-group">
-                <label for="coils">Coils</label>
-                <textarea id="coils" rows="2" placeholder="0:1\n1:0"></textarea>
+                <label for="coils" data-i18n="network.modbusCoils">Coils</label>
+                <textarea id="coils" rows="2" placeholder="0:1&#10;1:0"></textarea>
               </div>
               <div class="form-group">
-                <label for="discreteInputs">Discrete inputs</label>
-                <textarea id="discreteInputs" rows="2" placeholder="0:1\n1:0"></textarea>
+                <label for="discreteInputs" data-i18n="network.modbusDiscrete">Discrete inputs</label>
+                <textarea id="discreteInputs" rows="2" placeholder="0:1&#10;1:0"></textarea>
               </div>
               <div class="form-group">
-                <label for="vendorName">Vendor name</label>
+                <label for="vendorName" data-i18n="network.vendorName">Vendor name</label>
                 <input type="text" id="vendorName">
               </div>
               <div class="form-group">
-                <label for="productCode">Product code</label>
+                <label for="productCode" data-i18n="network.productCode">Product code</label>
                 <input type="text" id="productCode">
               </div>
               <div class="form-group">
-                <label for="productName">Product name</label>
+                <label for="productName" data-i18n="network.productName">Product name</label>
                 <input type="text" id="productName">
               </div>
               <div class="form-group">
-                <label for="modelName">Model name</label>
+                <label for="modelName" data-i18n="network.modelName">Model name</label>
                 <input type="text" id="modelName">
               </div>
               <div class="form-group">
-                <label for="majorMinorRevision">Revision</label>
+                <label for="majorMinorRevision" data-i18n="network.revision">Revision</label>
                 <input type="text" id="majorMinorRevision">
               </div>
               <div class="form-group">
-                <label for="vendorUrl">Vendor URL</label>
+                <label for="vendorUrl" data-i18n="network.vendorUrl">Vendor URL</label>
                 <input type="text" id="vendorUrl">
               </div>
               <div class="form-group">
-                <label for="userApplicationName">User application</label>
+                <label for="userApplicationName" data-i18n="network.userApplication">User application</label>
                 <input type="text" id="userApplicationName">
               </div>
             </div>
 
             <div class="protocol-block" id="dnp3Block">
-              <h3>DNP3</h3>
+              <h3 data-i18n="network.dnp3">DNP3</h3>
               <div id="dnp3MasterFields">
                 <div class="form-group">
-                  <label for="masterId">Master ID</label>
+                  <label for="masterId" data-i18n="network.dnp3MasterId">Master ID</label>
                   <input type="number" id="masterId" min="1">
                 </div>
               </div>
               <div id="dnp3SlaveFields">
                 <div class="form-group">
-                  <label for="outstationId">Outstation ID</label>
+                  <label for="outstationId" data-i18n="network.dnp3OutstationId">Outstation ID</label>
                   <input type="number" id="outstationId" min="1">
                 </div>
                 <div class="form-group">
-                  <label for="analogInputs">Analog inputs (JSON)</label>
+                  <label for="analogInputs" data-i18n="network.dnp3AnalogInputs">Analog inputs (JSON)</label>
                   <textarea id="analogInputs" rows="3" placeholder="{&quot;0&quot;:{&quot;value&quot;:12}}"></textarea>
                 </div>
                 <div class="form-group">
-                  <label for="binaryInputs">Binary inputs (JSON)</label>
+                  <label for="binaryInputs" data-i18n="network.dnp3BinaryInputs">Binary inputs (JSON)</label>
                   <textarea id="binaryInputs" rows="3" placeholder="{&quot;0&quot;:{&quot;value&quot;:1}}"></textarea>
                 </div>
                 <div class="form-group">
-                  <label for="analogOutputStatus">Analog output status (JSON)</label>
-                  <textarea id="analogOutputStatus" rows="3" placeholder="{&quot;0&quot;:{&quot;value&quot;:12}}"></textarea>
+                  <label for="analogOutputStatus" data-i18n="network.dnp3AnalogOutputStatus">Analog output status
+                    (JSON)</label>
+                  <textarea id="analogOutputStatus" rows="3"
+                    placeholder="{&quot;0&quot;:{&quot;value&quot;:12}}"></textarea>
                 </div>
                 <div class="form-group">
-                  <label for="binaryOutputStatus">Binary output status (JSON)</label>
-                  <textarea id="binaryOutputStatus" rows="3" placeholder="{&quot;0&quot;:{&quot;value&quot;:1}}"></textarea>
+                  <label for="binaryOutputStatus" data-i18n="network.dnp3BinaryOutputStatus">Binary output status
+                    (JSON)</label>
+                  <textarea id="binaryOutputStatus" rows="3"
+                    placeholder="{&quot;0&quot;:{&quot;value&quot;:1}}"></textarea>
                 </div>
                 <div class="form-group checkbox-row">
                   <input type="checkbox" id="dnp3Simulation">
-                  <label for="dnp3Simulation">Habilitar simulación periódica</label>
+                  <label for="dnp3Simulation" data-i18n="network.dnp3Simulation">Habilitar simulación periódica</label>
                 </div>
                 <div class="form-group">
-                  <label for="dnp3Interval">Intervalo (ms)</label>
+                  <label for="dnp3Interval" data-i18n="network.dnp3Interval">Intervalo (ms)</label>
                   <input type="number" id="dnp3Interval" min="100">
                 </div>
               </div>
             </div>
 
             <div class="protocol-block" id="iec104Block">
-              <h3>IEC 104</h3>
+              <h3 data-i18n="network.iec104">IEC 104</h3>
               <div class="form-group">
-                <label for="commonAddress">Common address</label>
+                <label for="commonAddress" data-i18n="network.iecCommonAddress">Common address</label>
                 <input type="number" id="commonAddress" min="1">
               </div>
               <div class="form-row">
                 <div class="form-group">
-                  <label for="tickRateMs">Tick rate (ms)</label>
+                  <label for="tickRateMs" data-i18n="network.iecTickRate">Tick rate (ms)</label>
                   <input type="number" id="tickRateMs" min="10">
                 </div>
                 <div class="form-group">
-                  <label for="selectTimeoutMs">Select timeout (ms)</label>
+                  <label for="selectTimeoutMs" data-i18n="network.iecSelectTimeout">Select timeout (ms)</label>
                   <input type="number" id="selectTimeoutMs" min="100">
                 </div>
               </div>
               <div class="form-row">
                 <div class="form-group">
-                  <label for="maxConnections">Max connections</label>
+                  <label for="maxConnections" data-i18n="network.iecMaxConnections">Max connections</label>
                   <input type="number" id="maxConnections" min="1">
                 </div>
                 <div class="form-group">
-                  <label for="authorizedMasters">Masters autorizados</label>
+                  <label for="authorizedMasters" data-i18n="network.iecAuthorizedMasters">Masters autorizados</label>
                   <input type="text" id="authorizedMasters" placeholder="1,2,3">
                 </div>
               </div>
               <div class="form-row">
                 <div class="form-group">
-                  <label for="iecK">K</label>
+                  <label for="iecK" data-i18n="network.iecK">K</label>
                   <input type="number" id="iecK" min="1">
                 </div>
                 <div class="form-group">
-                  <label for="iecW">W</label>
+                  <label for="iecW" data-i18n="network.iecW">W</label>
                   <input type="number" id="iecW" min="1">
                 </div>
               </div>
               <div class="form-row">
                 <div class="form-group">
-                  <label for="iecT1">T1</label>
+                  <label for="iecT1" data-i18n="network.iecT1">T1</label>
                   <input type="number" id="iecT1" min="1">
                 </div>
                 <div class="form-group">
-                  <label for="iecT2">T2</label>
+                  <label for="iecT2" data-i18n="network.iecT2">T2</label>
                   <input type="number" id="iecT2" min="1">
                 </div>
                 <div class="form-group">
-                  <label for="iecT3">T3</label>
+                  <label for="iecT3" data-i18n="network.iecT3">T3</label>
                   <input type="number" id="iecT3" min="1">
                 </div>
               </div>
               <div class="form-group">
-                <label for="iecSinglePoints">Single points (JSON)</label>
-                <textarea id="iecSinglePoints" rows="3" placeholder="{&quot;0&quot;:{&quot;ioa&quot;:1,&quot;value&quot;:1,&quot;report_ms&quot;:1000}}"></textarea>
+                <label for="iecSinglePoints" data-i18n="network.iecSinglePoints">Single points (JSON)</label>
+                <textarea id="iecSinglePoints" rows="3"
+                  placeholder="{&quot;0&quot;:{&quot;ioa&quot;:1,&quot;value&quot;:1,&quot;report_ms&quot;:1000}}"></textarea>
               </div>
               <div class="form-group">
-                <label for="iecMeasuredShort">Measured short (JSON)</label>
-                <textarea id="iecMeasuredShort" rows="3" placeholder="{&quot;0&quot;:{&quot;ioa&quot;:1,&quot;value&quot;:12.5,&quot;report_ms&quot;:1000}}"></textarea>
+                <label for="iecMeasuredShort" data-i18n="network.iecMeasuredShort">Measured short (JSON)</label>
+                <textarea id="iecMeasuredShort" rows="3"
+                  placeholder="{&quot;0&quot;:{&quot;ioa&quot;:1,&quot;value&quot;:12.5,&quot;report_ms&quot;:1000}}"></textarea>
               </div>
             </div>
 
             <div class="form-actions">
-              <button type="button" class="button button-secondary" id="cancelNode">Cancelar</button>
-              <button type="submit" class="button button-primary">Guardar nodo</button>
+              <button type="button" class="button button-secondary" id="cancelNode"
+                data-i18n="network.cancelNode">Cancelar</button>
+              <button type="submit" class="button button-primary" data-i18n="network.saveNode">Guardar nodo</button>
             </div>
           </form>
         </section>
 
         <section class="panel hidden" id="attacksPanel">
           <div class="panel-title-row">
-            <h2>Escenario de ataques</h2>
+            <h2 data-i18n="network.attacksTitle">Escenario de ataques</h2>
             <div class="panel-actions">
-              <button type="button" class="button button-secondary" id="expandAttacks">Expandir todo</button>
-              <button type="button" class="button button-secondary" id="collapseAttacks">Colapsar todo</button>
+              <button type="button" class="button button-secondary" id="expandAttacks"
+                data-i18n="network.expandAll">Expandir todo</button>
+              <button type="button" class="button button-secondary" id="collapseAttacks"
+                data-i18n="network.collapseAll">Colapsar todo</button>
             </div>
           </div>
-          <p class="hint">Selecciona técnicas MITRE ATT&CK for ICS para simular tráfico malicioso desde este master.</p>
+          <p class="hint" data-i18n="network.attacksHint">Selecciona técnicas MITRE ATT&CK for ICS para simular tráfico
+            malicioso desde este master.</p>
           <div class="form-group">
-            <label for="attacksMasterSelect">Master objetivo</label>
+            <label for="attacksMasterSelect" data-i18n="network.attacksMasterTarget">Master objetivo</label>
             <select id="attacksMasterSelect"></select>
           </div>
           <div id="attacksList"></div>
           <div class="form-actions">
-            <button type="button" class="button button-primary" id="saveAttacks">Guardar ataques</button>
+            <button type="button" class="button button-primary" id="saveAttacks" data-i18n="network.saveAttacks">Guardar
+              ataques</button>
           </div>
         </section>
 
         <section class="panel hidden" id="edgePanel">
-          <h2>Mensajes del master</h2>
+          <h2 data-i18n="network.edgeMessages">Mensajes del master</h2>
           <div class="edge-summary">
             <div>
-              <span class="label">Master</span>
+              <span class="label" data-i18n="network.masterLabel">Master</span>
               <span id="edgeSource">-</span>
             </div>
             <div>
-              <span class="label">Slave</span>
+              <span class="label" data-i18n="network.slaveLabel">Slave</span>
               <span id="edgeTarget">-</span>
             </div>
           </div>
-          <p class="hint">Los mensajes se enviarán desde el master al slave seleccionado.</p>
+          <p class="hint" data-i18n="network.edgeHint">Los mensajes se enviarán desde el master al slave seleccionado.
+          </p>
           <div id="messagesContainer"></div>
           <div class="form-actions">
-            <button type="button" class="button button-secondary" id="addMessage">+ Mensaje</button>
-            <button type="button" class="button button-primary" id="saveEdge">Guardar enlace</button>
+            <button type="button" class="button button-secondary" id="addMessage" data-i18n="network.addMessage">+
+              Mensaje</button>
+            <button type="button" class="button button-primary" id="saveEdge" data-i18n="network.saveEdge">Guardar
+              enlace</button>
           </div>
         </section>
       </aside>
@@ -280,8 +310,8 @@
       <main class="graph-panel">
         <div id="cy"></div>
         <div class="empty-state" id="emptyState">
-          <h3>Empieza creando un nodo</h3>
-          <p>Usa el botón “➕ Nodo” o haz click sobre el lienzo.</p>
+          <h3 data-i18n="network.emptyTitle">Empieza creando un nodo</h3>
+          <p data-i18n="network.emptyHint">Usa el botón “➕ Nodo” o haz click sobre el lienzo.</p>
         </div>
       </main>
     </div>
@@ -291,38 +321,40 @@
 
   <div class="modal" id="runModal" aria-hidden="true">
     <div class="modal-card">
-      <h2>Ejecutar simulación</h2>
-      <label for="simulationTime">Tiempo de simulación (s)</label>
+      <h2 data-i18n="network.runModalTitle">Ejecutar simulación</h2>
+      <label for="simulationTime" data-i18n="network.simulationTime">Tiempo de simulación (s)</label>
       <input type="number" id="simulationTime" min="1" value="60">
       <div class="form-actions">
-        <button class="button button-secondary" id="cancelRun">Cancelar</button>
-        <button class="button button-success" id="confirmRun">Ejecutar</button>
+        <button class="button button-secondary" id="cancelRun" data-i18n="common.cancel">Cancelar</button>
+        <button class="button button-success" id="confirmRun" data-i18n="network.runConfirm">Ejecutar</button>
       </div>
     </div>
   </div>
 
   <div class="modal" id="runOverlay" aria-hidden="true">
     <div class="modal-card">
-      <h2>Simulación en curso</h2>
+      <h2 data-i18n="network.runOverlayTitle">Simulación en curso</h2>
       <div class="progress-info">
-        <span>Tiempo:</span>
+        <span data-i18n="network.runTime">Tiempo:</span>
         <span id="progressTime">0</span>
       </div>
       <div class="progress-info">
-        <span>Progreso:</span>
+        <span data-i18n="network.runProgress">Progreso:</span>
         <span id="progressPercent">0%</span>
       </div>
       <div class="progress-info">
-        <span>PCAP:</span>
+        <span data-i18n="network.runPcap">PCAP:</span>
         <span id="progressPcap">0 KB</span>
       </div>
-      <button class="button button-danger" id="stopRun">Detener</button>
+      <button class="button button-danger" id="stopRun" data-i18n="network.stopRun">Detener</button>
     </div>
   </div>
 
   <script>
     const networkData = {{ toJSON .NetworkData }};
   </script>
+  <script src="/static/js/i18n.js"></script>
   <script type="module" src="/static/js/network.js"></script>
 </body>
+
 </html>

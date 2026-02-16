@@ -125,9 +125,9 @@ type Edge struct {
 }
 
 type Message struct {
-	Timestamp    int           `json:"timestamp" yaml:"timestamp"`
+	Timestamp    float64       `json:"timestamp" yaml:"timestamp"`
 	Recurrent    bool          `json:"recurrent" yaml:"recurrent"`
-	Interval     *int          `json:"interval,omitempty" yaml:"interval,omitempty"`
+	Interval     *float64      `json:"interval,omitempty" yaml:"interval,omitempty"`
 	IP           string        `json:"ip" yaml:"ip"`
 	Port         int           `json:"port" yaml:"port"`
 	SlaveID      int           `json:"slave_id,omitempty" yaml:"slave_id,omitempty"`
@@ -359,9 +359,20 @@ func ParseCytoscapeJSON(data CytoscapeData) (string, error) {
 	}
 
 	for _, edge := range data.Edges {
+		sourceNode := findFirstMatchingNode(data.Nodes, edge.Data.Source)
 		targetNode := findFirstMatchingNode(data.Nodes, edge.Data.Target)
-		if targetNode == nil {
+		if sourceNode == nil || targetNode == nil {
 			continue
+		}
+
+		masterNode := sourceNode
+		slaveNode := targetNode
+		if sourceNode.Data.Role == "master" && targetNode.Data.Role == "slave" {
+			masterNode = sourceNode
+			slaveNode = targetNode
+		} else if sourceNode.Data.Role == "slave" && targetNode.Data.Role == "master" {
+			masterNode = targetNode
+			slaveNode = sourceNode
 		}
 
 		for _, message := range edge.Data.Messages {
@@ -372,11 +383,11 @@ func ParseCytoscapeJSON(data CytoscapeData) (string, error) {
 				port = 2404
 			}
 
-			if p, ok := targetNode.Data.Port.(string); ok {
+			if p, ok := slaveNode.Data.Port.(string); ok {
 				if pInt, err := parseIntFromString(p); err == nil {
 					port = pInt
 				}
-			} else if pInt, ok := targetNode.Data.Port.(int); ok {
+			} else if pInt, ok := slaveNode.Data.Port.(int); ok {
 				port = pInt
 			}
 
@@ -384,18 +395,18 @@ func ParseCytoscapeJSON(data CytoscapeData) (string, error) {
 				Timestamp: message.Timestamp,
 				Recurrent: message.Recurrent,
 				Interval:  message.Interval,
-				IP:        targetNode.Data.IP,
+				IP:        slaveNode.Data.IP,
 				Port:      port,
 			}
 
 			switch Protocol(data.Protocol) {
 			case MODBUS:
 				slaveID := 1
-				if s, ok := targetNode.Data.SlaveID.(string); ok {
+				if s, ok := slaveNode.Data.SlaveID.(string); ok {
 					if sInt, err := parseIntFromString(s); err == nil {
 						slaveID = sInt
 					}
-				} else if sInt, ok := targetNode.Data.SlaveID.(int); ok {
+				} else if sInt, ok := slaveNode.Data.SlaveID.(int); ok {
 					slaveID = sInt
 				}
 				msg.SlaveID = slaveID
@@ -426,7 +437,7 @@ func ParseCytoscapeJSON(data CytoscapeData) (string, error) {
 				msg.Value = message.Value
 			}
 
-			messagesDict[edge.Data.Source] = append(messagesDict[edge.Data.Source], msg)
+			messagesDict[masterNode.Data.ID] = append(messagesDict[masterNode.Data.ID], msg)
 		}
 	}
 
